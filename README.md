@@ -1,4 +1,6 @@
 # dahai_z80  
-![](upload_2df2e4421b88ca03b7b0bea308d656d7.png)  
-![](upload_fed1ea99d87c32a75544a535fcd3dd0e.png)  
-![](upload_8c7c58f5be6eb834a7b49c717ddc3909.png)  
+![螢幕擷取畫面 2024-04-11 163721](https://github.com/pondahai/dahai_z80/assets/7918732/7225af42-2ac6-46fc-a4dc-4d1aa22fb285)
+
+![螢幕擷取畫面 2024-04-11 163736](https://github.com/pondahai/dahai_z80/assets/7918732/126268b1-b3d6-45ac-be49-6ff2f62e6d3f)
+
+![螢幕擷取畫面 2024-04-11 163752](https://github.com/pondahai/dahai_z80/assets/7918732/83b66765-ec71-4fa6-baa6-74ba623ca22e)
