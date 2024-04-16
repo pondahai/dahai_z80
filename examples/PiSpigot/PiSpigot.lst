@@ -1,0 +1,736 @@
+                00001 ;=============================================================================
+                00002 ;       Spigot algorithm to compute PI
+                00003 ;=============================================================================
+                00004 ;
+                00005 ;       Build:
+                00006 ;               zmac PiSpigot.asm --od PiSpigot --oo cim,lst -c -s -g
+                00007 ;   Convert:
+                00008 ;       python3 conv.py PiSpigot/PiSpigot.cim > PiSpigot.c
+                00009 ;       ZMAC: 8080/Z-80 Cross-Assembler for Windows
+                00010 ;               http://48k.ca/zmac.html
+                00011 ;=============================================================================
+                00012 
+                00013 ;-----------------------------------------------------------------------------
+                00014 ;       Title
+                00015 $TITLE  MACRO
+                00016         DB      'Pi Spigot - Ver:1.20 - Dec-2019'
+                00017         ENDM
+                00018 
+                00019 ;-----------------------------------------------------------------------------
+                00020 ;       Settings
+    = 0000      00021 DEBUG   EQU     0                       ; Debug mode
+    = 0032      00022 NDIGITS EQU     50                      ; Number of digits to compute (9674 max)
+                00023 
+                00024 ;-----------------------------------------------------------------------------
+                00025 
+    = 000D      00026 CR      EQU     0DH                     ; Carriage Return
+    = 000A      00027 LF      EQU     0AH                     ; Line Feed
+                00028 
+                00029 ;-----------------------------------------------------------------------------
+                00030 ;       Macro to break in emulator
+                00031 $BREAK  MACRO
+                00032         IF      DEBUG
+                00033         DB      0EDH,0F5H               ; Emulator $BREAK opcode
+                00034         ENDIF
+                00035         ENDM
+                00036                                         ;
+                00037 
+                00038 ;-----------------------------------------------------------------------------
+                00039 ;       IPL entry
+                00040         ORG     0000H
+                00041 
+0000  F3        00042 BOOT    DI                              ; No interrupts
+0001  C3D201    00043         JP      SPIGOT                  ;
+                00044 
+                00045 ;-----------------------------------------------------------------------------
+                00046 ;       Send one char to the terminal
+0004  08        00047 PUTCH   EX      AF,AF'                  ; Save char to A'
+0005  3E01      00048         LD      A,1                     ; IOS:SERIAL_TX opcode
+0007  D300      00049         OUT     (0),A                   ; send it
+0009  08        00050         EX      AF,AF'                  ; restore char in A
+000A  D301      00051         OUT     (1),A                   ; Send it
+000C  C9        00052         RET                             ; Done
+                00053 
+                00054 ;-----------------------------------------------------------------------------
+                00055 ;       Send a null-terminated string to the terminal
+000D  7E        00056 PUTS    LD      A,(HL)                  ; get char from string
+000E  23        00057         INC     HL                      ; bump ptr
+000F  B7        00058         OR      A                       ; NULL terminator ?
+0010  C8        00059         RET     Z                       ; Return if yes
+0011  CD0400    00060         CALL    PUTCH                   ; Send char to terminal
+0014  18F7      00061         JR      PUTS                    ; Loop again
+                00062 
+                00063 ;-----------------------------------------------------------------------------
+                00064 ;       Display HL in decimal
+0016  11E803    00065 PUTHL4: LD      DE,1000                 ;
+0019  CD2B00    00066         CALL    PUT1HL                  ; Display thousands
+001C  116400    00067         LD      DE,100                  ;
+001F  CD2B00    00068         CALL    PUT1HL                  ; Display hundreds
+0022  110A00    00069         LD      DE,10                   ;
+0025  CD2B00    00070         CALL    PUT1HL                  ; Display tens
+0028  7D        00071         LD      A,L                     ;
+0029  1808      00072         JR      PUTHL1                  ; Display units
+002B  3EFF      00073 PUT1HL  LD      A,0FFH                  ; Init counter
+002D  3C        00074 PUT1HL1 INC     A                       ; Inc counter
+002E  ED52      00075         SBC     HL,DE                   ; Try subtract
+0030  30FB      00076         JR      NC,PUT1HL1              ; Loop while OK
+0032  19        00077         ADD     HL,DE                   ; Revert subtract
+0033  C630      00078 PUTHL1  ADD     A,'0'                   ; Adjust for ASCII digit
+0035  18CD      00079         JR      PUTCH                   ; Display it
+                00080 
+                00081 ;-----------------------------------------------------------------------------
+                00082 ;       Display A in decimal
+0037  060A      00083 PUTA2:  LD      B,10                    ;
+0039  CD4000    00084         CALL    PUT1A                   ; Display tens
+003C  C630      00085 PUTA1:  ADD     A,'0'                   ; Adjust for ASCII digit
+003E  18C4      00086         JR      PUTCH                   ; Display units
+0040  0EFF      00087 PUT1A:  LD      C,0FFH                  ; Init counter
+0042  0C        00088 PUT1A1: INC     C                       ; Inc counter
+0043  90        00089         SUB     A,B                     ; Try subtract
+0044  30FC      00090         JR      NC,PUT1A1               ; Loop while OK
+0046  80        00091         ADD     A,B                     ; Revert subtract
+0047  47        00092         LD      B,A                     ; Save
+0048  79        00093         LD      A,C                     ; Get digit
+0049  CD3C00    00094         CALL    PUTA1                   ; Display it
+004C  78        00095         LD      A,B                     ; Restore
+004D  C9        00096         RET                             ; Done
+                00097 
+                00098 ;-----------------------------------------------------------------------------
+                00099 ;       Read Time
+                00100 READTIME:
+004E  23        00101         INC     HL
+004F  23        00102         INC     HL
+0050  3E84      00103         LD      A,84H                   ; IOS:OPCODE DATETIME
+0052  D300      00104         OUT     (0),A                   ; Send opcode
+0054  DB00      00105         IN      A,(0)                   ; Read seconds
+0056  77        00106         LD      (HL),A                  ; Save
+0057  2B        00107         DEC     HL                      ;
+0058  DB00      00108         IN      A,(0)                   ; Read minutes
+005A  77        00109         LD      (HL),A                  ; Save
+005B  2B        00110         DEC     HL                      ;
+005C  DB00      00111         IN      A,(0)                   ; Read hours
+005E  77        00112         LD      (HL),A                  ; Save
+005F  C9        00113         RET                             ; Done
+                00114 
+                00115 
+                00116 ;-----------------------------------------------------------------------------
+                00117 ;       Display Time
+0060  7E        00118 PUTTIME LD      A,(HL)                  ; Get hours
+0061  23        00119         INC     HL
+0062  CD3700    00120         CALL    PUTA2                   ; Display hours
+0065  3E3A      00121         LD      A,':'                   ;
+0067  CD0400    00122         CALL    PUTCH                   ; Display sep
+006A  7E        00123         LD      A,(HL)                  ; Get mintues
+006B  23        00124         INC     HL
+006C  CD3700    00125         CALL    PUTA2                   ; Display minutes
+006F  3E3A      00126         LD      A,':'                   ;
+0071  CD0400    00127         CALL    PUTCH                   ; Display sep
+0074  7E        00128         LD      A,(HL)                  ; Get seconds
+0075  C33700    00129         JP      PUTA2                   ; Display seconds
+                00130 
+                00131 ;-----------------------------------------------------------------------------
+                00132 ;       Wait for a keypress from the terminal
+0078  DB01      00133 WAITKI  IN      A,(1)                   ; Get char from terminal
+007A  FEFF      00134         CP      0FFH                    ; No char ?
+007C  28FA      00135         JR      Z,WAITKI                ; Loop if yes
+007E  C9        00136         RET                             ; Done
+                00137 
+                00138 
+                00139 ;-----------------------------------------------------------------------------
+                00140 ;       Div HL by DE
+                00141 DIVHLDE:
+                00142 ;       Scale divisor
+007F  AF        00143         XOR     A                       ; Init loop counter
+0080  EB        00144         EX      DE,HL                   ; Divisor to HL
+0081  3C        00145 DIVL1   INC     A                       ; Inc counter
+0082  C8        00146         RET     Z                       ; Overflow: return
+0083  29        00147         ADD     HL,HL                   ; Shift left divisor
+0084  30FB      00148         JR      NC,DIVL1                ; Loop while not past left bound
+0086  CB1C      00149         RR      H                       ; Restore scaled divisor
+0088  CB1D      00150         RR      L                       ;
+008A  44        00151         LD      B,H                     ; Scaled Divisor to BC
+008B  4D        00152         LD      C,L                     ;
+008C  EB        00153         EX      DE,HL                   ; Dividend to HL
+008D  110000    00154         LD      DE,0                    ; Clear quotient
+0090  EB        00155 DIVL2:  EX      DE,HL                   ; Shift left quotient
+0091  29        00156         ADD     HL,HL                   ;
+0092  EB        00157         EX      DE,HL                   ;
+0093  ED42      00158         SBC     HL,BC                   ; Try to subtract divisor from dividend (C is cleared)
+0095  13        00159         INC     DE                      ; Try to Add 1 to quotient
+0096  3002      00160         JR      NC,DIVJ2                ; If OK, go
+0098  1B        00161         DEC     DE                      ; Cancel addition to quotient
+0099  09        00162         ADD     HL,BC                   ; Cancel subtraction
+009A  CB38      00163 DIVJ2:  SRL     B                       ; Shift right divisor
+009C  CB19      00164         RR      C                       ;
+009E  3D        00165         DEC     A                       ; Dec loop counter
+009F  20EF      00166         JR      NZ,DIVL2                ; Continue while counter > 0
+00A1  EB        00167         EX      DE,HL                   ; Quotient to HL, remainder to DE
+00A2  C9        00168         RET                             ; Done
+                00169 
+                00170 ;-----------------------------------------------------------------------------
+                00171 ;       Long Div HL by DE
+                00172 LDIVHLDE:
+                00173 ;       Scale divisor
+00A3  0604      00174         LD      B,4                     ; Non-null dividend byte counter
+00A5  EB        00175         EX      DE,HL                   ; Divisor to HL, low word
+00A6  D9        00176         EXX                             ;
+00A7  EB        00177         EX      DE,HL                   ; idem, high word
+00A8  7A        00178         LD      A,D                     ; Get dividend high byte (3)
+00A9  B7        00179         OR      A                       ; Check it
+00AA  7B        00180         LD      A,E                     ; Get dividend next byte (2)
+00AB  D9        00181         EXX                             ;
+00AC  2009      00182         JR      NZ,LDIVJ0               ; Go if divid high byte is not null
+00AE  05        00183         DEC     B                       ; dec byte counter
+00AF  B7        00184         OR      A                       ; Check divid next byte (2)
+00B0  2005      00185         JR      NZ,LDIVJ0               ; Go if divid next byte (2) is not null
+00B2  05        00186         DEC     B                       ; dec byte counter
+00B3  B2        00187         OR      D                       ; Check divid next byte (1)
+00B4  2001      00188         JR      NZ,LDIVJ0               ; Go if divid next byte (1) is not null
+00B6  05        00189         DEC     B                       ; dec byte counter
+00B7  78        00190 LDIVJ0  LD      A,B                     ; mult byte counter by 8
+00B8  87        00191         ADD     A,A                     ;
+00B9  87        00192         ADD     A,A                     ;
+00BA  87        00193         ADD     A,A                     ;
+00BB  47        00194         LD      B,A                     ;
+00BC  AF        00195         XOR     A                       ; Init loop counter
+00BD  05        00196 LDIVL1  DEC     B                       ; Dec byte counter
+00BE  2809      00197         JR      Z,LDIVJ1                ; exit loop when zero
+00C0  3C        00198         INC     A                       ; Inc counter
+00C1  C8        00199         RET     Z                       ; Overflow: return
+                00200 
+00C2  29        00201         ADD     HL,HL                   ; Shift left divisor, low word
+00C3  D9        00202         EXX                             ;
+00C4  ED6A      00203         ADC     HL,HL                   ; Idem, high word
+00C6  D9        00204         EXX                             ;
+                00205 
+00C7  30F4      00206         JR      NC,LDIVL1               ; Loop while not past left bound
+                00207 
+00C9  D9        00208 LDIVJ1: EXX                             ;
+00CA  CB1C      00209         RR      H                       ; Restore scaled divisor, high word
+00CC  CB1D      00210         RR      L                       ;
+00CE  44        00211         LD      B,H                     ; Scaled divisor to BC, high word
+00CF  4D        00212         LD      C,L                     ;
+00D0  EB        00213         EX      DE,HL                   ; Dividend to HL, high word
+00D1  110000    00214         LD      DE,0                    ; Clear quotient, high word
+00D4  D9        00215         EXX                             ;
+00D5  CB1C      00216         RR      H                       ; Restore scaled divisor, low word
+00D7  CB1D      00217         RR      L                       ;
+00D9  44        00218         LD      B,H                     ; Scaled divisor to BC, low word
+00DA  4D        00219         LD      C,L                     ;
+00DB  EB        00220         EX      DE,HL                   ; Dividend to HL, low word
+00DC  110000    00221         LD      DE,0                    ; Clear quotient, low word
+                00222 
+00DF  EB        00223 LDIVL2: EX      DE,HL                   ; Shift left quotient, high word
+00E0  29        00224         ADD     HL,HL                   ;
+00E1  EB        00225         EX      DE,HL                   ;
+00E2  D9        00226         EXX                             ;
+00E3  EB        00227         EX      DE,HL                   ; Idem, high word
+00E4  ED6A      00228         ADC     HL,HL                   ;
+00E6  EB        00229         EX      DE,HL                   ;
+00E7  D9        00230         EXX                             ;
+                00231 
+00E8  ED42      00232         SBC     HL,BC                   ; Try to subtract divisor from dividend, low word (C is cleared)
+00EA  D9        00233         EXX
+00EB  ED42      00234         SBC     HL,BC                   ; Idem, high word
+00ED  D9        00235         EXX
+                00236 
+00EE  13        00237         INC     DE                      ; Try to Add 1 to quotient
+00EF  3006      00238         JR      NC,LDIVJ2               ; If OK, go
+00F1  1B        00239         DEC     DE                      ; Cancel addition to quotient
+                00240 
+00F2  09        00241         ADD     HL,BC                   ; Cancel subtraction, low word
+00F3  D9        00242         EXX                             ;
+00F4  ED4A      00243         ADC     HL,BC                   ; Idem, high word
+00F6  D9        00244         EXX                             ;
+                00245 
+00F7  D9        00246 LDIVJ2: EXX                             ;
+00F8  CB38      00247         SRL     B                       ; Shift right divisor, high word
+00FA  CB19      00248         RR      C                       ;
+00FC  D9        00249         EXX                             ;
+00FD  CB18      00250         RR      B                       ; Idem, low word
+00FF  CB19      00251         RR      C                       ;
+                00252 
+0101  3D        00253         DEC     A                       ; Dec loop counter
+0102  20DB      00254         JR      NZ,LDIVL2               ; Continue while counter > 0
+                00255 
+0104  EB        00256         EX      DE,HL                   ; Quotient to HL, remainder to DE, low word
+0105  D9        00257         EXX                             ;
+0106  EB        00258         EX      DE,HL                   ; idem, high word
+0107  D9        00259         EXX                             ;
+                00260 
+0108  C9        00261         RET                             ; Done
+                00262 
+                00263 ;-----------------------------------------------------------------------------
+                00264 ;       Long MUL HL,DE (condition: HL' == 0)
+                00265 ;       HL':HL := HL * DE':DE
+                00266 LMULHLDE16:
+0109  CD3001    00267         CALL    LLDBCHL                 ; Move multiplicand HL':HL to BC':BC
+010C  210000    00268         LD      HL,0                    ; Product, HL':HL := 0
+010F  D9        00269         EXX                             ;
+0110  210000    00270         LD      HL,0                    ;
+0113  D9        00271         EXX                             ;
+0114  3E10      00272         LD      A,16                    ; Loop counter, only 16 loops because HL' == 0
+0116  D9        00273 LMULL1: EXX                             ; Multiplicand, BC':BC >>= 1
+0117  CB38      00274         SRL     B                       ;
+0119  CB19      00275         RR      C                       ;
+011B  D9        00276         EXX                             ;
+011C  CB18      00277         RR      B                       ;
+011E  CB19      00278         RR      C                       ;
+0120  DC3D01    00279         CALL    C,LADDHLDE              ; Product += Multiplicator if multiplicand's last bit was 1
+0123  EB        00280         EX      DE,HL                   ; product, HL':HL <<= 1
+0124  29        00281         ADD     HL,HL                   ;
+0125  EB        00282         EX      DE,HL                   ;
+0126  D9        00283         EXX                             ;
+0127  EB        00284         EX      DE,HL                   ;
+0128  ED6A      00285         ADC     HL,HL                   ;
+012A  EB        00286         EX      DE,HL                   ;
+012B  D9        00287         EXX                             ;
+012C  3D        00288         DEC     A                       ; Decrement loop counter
+012D  20E7      00289         JR      NZ,LMULL1               ; Continue while counter > 0
+012F  C9        00290         RET                             ; Done
+                00291 
+                00292 ;-----------------------------------------------------------------------------
+                00293 ;       Long LD BCx,HLx
+                00294 ;       BC':BC := HL':HL
+                00295 LLDBCHL:
+0130  44        00296         LD      B,H                     ; BC := HL
+0131  4D        00297         LD      C,L                     ;
+0132  D9        00298         EXX                             ;
+0133  44        00299         LD      B,H                     ; BC' := HL'
+0134  4D        00300         LD      C,L                     ;
+0135  D9        00301         EXX                             ;
+0136  C9        00302         RET                             ; Done
+                00303 
+                00304 ;-----------------------------------------------------------------------------
+                00305 ;       Long ADD HLx,BCx
+                00306 ;       HL':HL += BC':BC
+                00307 LADDHLBC:
+0137  09        00308         ADD     HL,BC                   ; HL += BC
+0138  D9        00309         EXX                             ;
+0139  ED4A      00310         ADC     HL,BC                   ; HL' += BC' + carry
+013B  D9        00311         EXX                             ;
+013C  C9        00312         RET                             ; Done
+                00313 
+                00314 ;-----------------------------------------------------------------------------
+                00315 ;       Long ADD HLx,DEx
+                00316 ;       HL':HL += DE':DE
+                00317 LADDHLDE:
+013D  19        00318         ADD     HL,DE                   ; HL += DE
+013E  D9        00319         EXX                             ;
+013F  ED5A      00320         ADC     HL,DE                   ; HL' += DE' + carry
+0141  D9        00321         EXX                             ;
+0142  C9        00322         RET                             ; Done
+                00323 
+                00324 ;-----------------------------------------------------------------------------
+                00325 ;       Long ADD HLx,HLx
+                00326 ;       HL':HL <<= 1
+                00327 LADDHLHL:
+0143  29        00328         ADD     HL,HL                   ; HL <<= 1
+0144  D9        00329         EXX                             ;
+0145  ED6A      00330         ADC     HL,HL                   ; HL' <<= 1 with carry
+0147  D9        00331         EXX                             ;
+0148  C9        00332         RET                             ; Done
+                00333 
+                00334 
+                00335 ;-----------------------------------------------------------------------------
+                00336 ;       Long MUL HLx,10L
+                00337 LMULHL10:
+0149  CD3001    00338         CALL    LLDBCHL                 ; BC':BC := HL':HL
+014C  CD4301    00339         CALL    LADDHLHL                ; HL':HL <<= 1          => 2 * HL':HL
+014F  CD4301    00340         CALL    LADDHLHL                ; HL':HL <<= 1          => 4 * HL':HL
+0152  CD3701    00341         CALL    LADDHLBC                ; HL':HL += BC':BC      => 5 * HL':HL
+0155  CD4301    00342         CALL    LADDHLHL                ; HL':HL <<= 1          => 10 * HL':HL
+0158  C9        00343         RET                             ; Done
+                00344 
+                00345 
+                00346 ;-----------------------------------------------------------------------------
+                00347 ;       Pi-Spigot OneLoop routine
+                00348 OneLoop:
+                00349 ;       I := I * 10 DIV 3 + 16
+0159  CD4901    00350         CALL    LMULHL10                ; I *= 10
+015C  CDA300    00351         CALL    LDIVHLDE                ; I /= 3 (3 was loaded in DE':DE before call)
+015F  011000    00352         LD      BC,16                   ;
+0162  09        00353         ADD     HL,BC                   ; I += 16 (6 safety digits)
+0163  227A03    00354         LD      (I_),HL                 ; update I
+                00355 
+                00356 ;       IF ( I > LEN ) THEN I := LEN;
+0166  EB        00357         EX      DE,HL                   ; I to DE
+0167  2A7803    00358         LD      HL,(LEN_)               ; LEN to HL
+016A  B7        00359         OR      A                       ;
+016B  ED52      00360         SBC     HL,DE                   ; Compare I to LEN
+016D  EB        00361         EX      DE,HL                   ; I to HL
+016E  3003      00362         JR      NC,ILELEN               ; if LEN < I then
+0170  2A7803    00363         LD      HL,(LEN_)               ;   I := LEN
+0173  227A03    00364 ILELEN: LD      (I_),HL                 ; update I
+0176  29        00365         ADD     HL,HL                   ; I *= 2
+0177  118A03    00366         LD      DE,ARRAY                ; ARRAY origin
+017A  19        00367         ADD     HL,DE                   ; ARRAY + 2 * I
+017B  E5        00368         PUSH    HL                      ;
+017C  DDE1      00369         POP     IX                      ; to IX, ARRAY pointer
+                00370 
+                00371 ;       RES := 0;
+017E  210000    00372         LD      HL,0                    ; Clear RES
+0181  227E03    00373         LD      (RES_),HL               ;
+                00374 
+                00375 ;       REPEAT
+                00376 REPT1:
+                00377 ;       X := 10 * A[I] + RES * I;
+0184  2A7E03    00378         LD      HL,(RES_)               ; RES to HL
+0187  ED5B7A03  00379         LD      DE,(I_)                 ; I to DE
+018B  D9        00380         EXX                             ;
+018C  210000    00381         LD      HL,0                    ; HL' := DE' := 0
+018F  110000    00382         LD      DE,0                    ;   low words only
+0192  D9        00383         EXX                             ;
+0193  CD0901    00384         CALL    LMULHLDE16              ; HL':HL := HL * DE == RES * I
+0196  EB        00385         EX      DE,HL                   ; to DE':DE (low word)
+0197  DD6E00    00386         LD      L,(IX+0)                ; HL := ARRAY[I] (16 bits)
+019A  DD6601    00387         LD      H,(IX+1)                ;
+019D  D9        00388         EXX                             ;
+019E  EB        00389         EX      DE,HL                   ; to DE':DE (high word)
+019F  210000    00390         LD      HL,0                    ; HL' := 0 because ARRAY[I] < 10000H
+01A2  D9        00391         EXX                             ;
+01A3  CD4901    00392         CALL    LMULHL10                ; HL':HL *= 10          ( == 10 * ARRAY[I] )
+01A6  CD3D01    00393         CALL    LADDHLDE                ; HL':HL += DE':DE      ( += RES * I )
+01A9  E5        00394         PUSH    HL                      ; Save HL (no need to save HL')
+                00395 
+                00396 ;       K := 2*I - 1
+01AA  2A7A03    00397         LD      HL,(I_)                 ; I to HL (low word only because I < 8000H)
+01AD  29        00398         ADD     HL,HL                   ; HL <<= 1              ( 2*I )
+01AE  2B        00399         DEC     HL                      ; HL -= 1               ( 2*I - 1 )
+01AF  EB        00400         EX      DE,HL                   ; to DE
+01B0  E1        00401         POP     HL                      ; restore HL
+01B1  D9        00402         EXX                             ;
+01B2  110000    00403         LD      DE,0                    ; DE' := 0
+01B5  D9        00404         EXX                             ;
+                00405 
+                00406 ;       RES := X DIV K;
+                00407 ;       A[I] := X MOD K;
+01B6  CDA300    00408         CALL    LDIVHLDE                ; HL /= DE              ( X / ( 2*I - 1 ) )
+01B9  227E03    00409         LD      (RES_),HL               ; RES := quotient
+01BC  DD7300    00410         LD      (IX+0),E                ; ARRAY[I] := remainder (16 bits)
+01BF  DD7201    00411         LD      (IX+1),D                ;
+                00412 
+                00413 ;       I := I - 1;
+01C2  DD2B      00414         DEC     IX                      ; Dec ARRAY pointer
+01C4  DD2B      00415         DEC     IX                      ;
+01C6  2A7A03    00416         LD      HL,(I_)                 ; I -= 1
+01C9  2B        00417         DEC     HL                      ;
+01CA  227A03    00418         LD      (I_),HL                 ;
+                00419 
+                00420 ;       UNTIL I <= 0;
+01CD  7C        00421         LD      A,H                     ; Check if I != 0
+01CE  B5        00422         OR      L                       ;
+01CF  20B3      00423         JR      NZ,REPT1                ; Continue if yes
+                00424 
+01D1  C9        00425         RET                             ; Done
+                00426 
+                00427 ;-----------------------------------------------------------------------------
+                00428 ;       Pi-Spigot Entry Point
+                00429 Spigot:
+01D2  212D03    00430         LD      HL,SPIGOT$              ; Welcome message
+01D5  CD0D00    00431         CALL    PUTS                    ; Display it
+01D8  218703    00432         LD      HL,TIME_                ; Get and save start time
+01DB  CD4E00    00433         CALL    READTIME                ;
+01DE  FD217603  00434         LD      IY,IY0                  ; Initialize variables pointer
+                00435 
+                00436 ;       N := NDIGITS;
+01E2  213200    00437         LD      HL,NDIGITS              ; HL := Number of decimals to compute
+01E5  23        00438         INC     HL                      ; + unit digit
+01E6  227603    00439         LD      (N_),HL                 ; Save to N
+                00440 
+                00441 ;       LEN = N * 10 DIV 3
+01E9  110300    00442         LD      DE,3                    ; Init DE':DE := Divisor (3)
+01EC  D9        00443         EXX                             ;
+01ED  210000    00444         LD      HL,0                    ; HL' := DE' := 0
+01F0  110000    00445         LD      DE,0                    ;
+01F3  D9        00446         EXX                             ;
+01F4  CD4901    00447         CALL    LMULHL10                ; HL := 10 * N
+01F7  CDA300    00448         CALL    LDIVHLDE                ; HL /= 3               ( HL := 10 * N DIV 3 )
+01FA  227803    00449         LD      (LEN_),HL               ; save to LEN
+                00450 
+                00451 ;       FOR J:=0 TO LEN DO A[J] := 2;
+01FD  23        00452         INC     HL                      ; HL := LEN + 1
+01FE  44        00453         LD      B,H                     ; Loop counter, BC := HL == LEN + 1
+01FF  4D        00454         LD      C,L                     ;
+0200  29        00455         ADD     HL,HL                   ; HL := ( LEN + 1 ) * 2
+0201  118A03    00456         LD      DE,ARRAY                ; DE := ARRAY origin
+0204  19        00457         ADD     HL,DE                   ; DE += ( LEN + 1 ) * 2
+0205  D9        00458         EXX                             ;
+0206  210000    00459         LD      HL,0                    ; Save SP to HL'
+0209  39        00460         ADD     HL,SP                   ;
+020A  D9        00461         EXX                             ;
+020B  F9        00462         LD      SP,HL                   ; SP := HL
+020C  110200    00463         LD      DE,2                    ; 2 to write
+020F  D5        00464 SPL01:  PUSH    DE                      ; Write 2 at SP ; SP -= 2
+0210  0B        00465         DEC     BC                      ; Dec loop counter
+0211  78        00466         LD      A,B                     ;
+0212  B1        00467         OR      C                       ;
+0213  20FA      00468         JR      NZ,SPL01                ; Loop while counter > 0
+0215  D9        00469         EXX                             ;
+0216  F9        00470         LD      SP,HL                   ; Restore SP from HL'
+                00471 
+                00472 ;       NINES := 0;
+0217  AF        00473         XOR     A                       ;
+0218  FD770A    00474         LD      (IY+NINES$),A           ; Counter of 9s := 0
+                00475 
+                00476 ;       PREDIGIT := 0;
+021B  FD770B    00477         LD      (IY+PREDIG$),A          ; Predigit := 0 (maybe useless)
+                00478 
+                00479 ;       GROUPS := 10
+021E  FD360E0A  00480         LD      (IY+GROUPS$),10         ; Groups of 5 digits counter (for NL)
+                00481 
+                00482 ;       GROUP := 6
+0222  FD360D06  00483         LD      (IY+GROUP$),6           ; Digits counter
+                00484 
+                00485 ;       DOT := '.'
+0226  FD360C2E  00486         LD      (IY+DOT$),'.'           ; Dot to display after 1st digit
+                00487 
+                00488 
+                00489 ;       FOR J := 0 TO N DO
+022A  210000    00490         LD      HL,0                    ; J := 0
+022D  227C03    00491         LD      (J_),HL                 ;
+0230  2B        00492         DEC     HL                      ; Init decimals counter
+0231  228503    00493         LD      (COUNT_),HL             ;
+                00494 
+                00495 FORJ:
+0234  2A7C03    00496         LD      HL,(J_)                 ; HL := J
+                00497 
+                00498 ;       QI := OneLoop ( N - J );
+                00499 
+                00500 ;       I := N - J;
+0237  EB        00501         EX      DE,HL                   ; DE := J
+0238  2A7603    00502         LD      HL,(N_)                 ; HL := N
+023B  B7        00503         OR      A                       ;
+023C  ED52      00504         SBC     HL,DE                   ; HL -= DE      ( N - J )
+023E  110300    00505         LD      DE,3                    ; Load divisor 3 to DE':DE
+0241  D9        00506         EXX                             ;
+0242  210000    00507         LD      HL,0                    ; HL' := 0      ( N - J < 10000H )
+0245  110000    00508         LD      DE,0                    ; DE' := 0
+0248  D9        00509         EXX                             ;
+                00510 
+0249  CD5901    00511         CALL    OneLoop                 ; Base conversion fot 1 digit
+                00512 
+                00513 ;       Q := RES DIV 10;
+                00514 ;       A[1] := RES MOD 10;
+024C  2A7E03    00515         LD      HL,(RES_)               ; RES == 10 * digit + remainder
+024F  110A00    00516         LD      DE,10                   ;
+0252  CD7F00    00517         CALL    DIVHLDE                 ; RES /= 10 (in HL with H == 0)
+0255  ED538C03  00518         LD      (ARRAY+2),DE            ; Remainder in DE to ARRAY[1]
+                00519 
+                00520 ;       IF Q = 9 THEN INC(NINES);
+0259  7D        00521         LD      A,L                     ; Examine Digit
+025A  FE09      00522         CP      9                       ; If not 9
+025C  2005      00523         JR      NZ,QNOT9                ;   go
+025E  FD340A    00524         INC     (IY+NINES$)             ; else count 9s
+0261  183F      00525         JR      ENDIF1                  ; Done
+                00526 
+                00527 ;       ELSE IF Q = 10 THEN
+0263  FE0A      00528 QNOT9:  CP      10                      ; If not 10
+0265  201C      00529         JR      NZ,QNOT10               ;   go
+                00530 
+                00531 ;       OUTDIG( 1 + PREDIGIT );
+                00532 ;       PREDIGIT := 0;
+0267  FD7E0B    00533         LD      A,(IY+PREDIG$)          ; Else get digit preceding 9s
+026A  FD360B00  00534         LD      (IY+PREDIG$),0          ; Clear stored value
+026E  3C        00535         INC     A                       ; Increment digit
+026F  CDEE02    00536         CALL    OUTDIG                  ; Display it
+                00537 
+                00538 ;       WHILE NINES > 0 DO
+                00539 ;       BEGIN
+                00540 ;         OUT( '0' );
+                00541 ;         NINES := NINES - 1;
+                00542 ;       END;
+                00543 
+0272  FD7E0A    00544         LD      A,(IY+NINES$)           ; Check for 9s
+0275  B7        00545         OR      A                       ;
+0276  2809      00546         JR      Z,NOZEROS               ; Go if none
+0278  AF        00547 WZEROS: XOR     A                       ; Display 0s instead of 9s
+0279  CDEE02    00548         CALL    OUTDIG                  ;
+027C  FD350A    00549         DEC     (IY+NINES$)             ; Dec 9s counter
+027F  20F7      00550         JR      NZ,WZEROS               ; Loop until all 0s displayed
+                00551 NOZEROS:
+0281  181F      00552         JR      ENDIF1                  ; Done
+                00553 
+                00554 ;       ELSE
+                00555 QNOT10:
+                00556 ;       IF J > 0 THEN OUTDIG( PREDIGIT );
+                00557 ;       PREDIGIT := Q
+0283  FD7E06    00558         LD      A,(IY+J$)               ; Get J
+0286  FDB607    00559         OR      (IY+J$+1)               ; Is it 0 (first loop) ?
+0289  FD7E0B    00560         LD      A,(IY+PREDIG$)          ; Load digit preceding 9s
+028C  FD750B    00561         LD      (IY+PREDIG$),L          ; Store new digit
+028F  C4EE02    00562         CALL    NZ,OUTDIG               ; Display if not first loop
+                00563 
+                00564 ;       WHILE NINES > 0 DO
+                00565 ;       BEGIN
+                00566 ;         OUT( '9' );
+                00567 ;         NINES := NINES - 1;
+                00568 ;       END;
+0292  FD7E0A    00569         LD      A,(IY+NINES$)           ; Check for 9s
+0295  B7        00570         OR      A                       ;
+0296  280A      00571         JR      Z,NONINES               ; Go if none
+0298  3E09      00572 WNINES: LD      A,9                     ; Display 9s
+029A  CDEE02    00573         CALL    OUTDIG                  ;
+029D  FD350A    00574         DEC     (IY+NINES$)             ; Dec 9s counter
+02A0  20F6      00575         JR      NZ,WNINES               ; Loop until all 9s displayed
+                00576 NONINES:
+                00577 
+02A2  2A7C03    00578 ENDIF1: LD      HL,(J_)                 ; Get J, main loop counter
+02A5  23        00579         INC     HL                      ; Increment it
+02A6  227C03    00580         LD      (J_),HL                 ; Store new value
+02A9  ED5B7603  00581         LD      DE,(N_)                 ; Compare with N
+02AD  B7        00582         OR      A                       ;
+02AE  ED52      00583         SBC     HL,DE                   ; J == N ?
+02B0  7C        00584         LD      A,H                     ;
+02B1  B5        00585         OR      L                       ;
+02B2  C23402    00586         JP      NZ,FORJ                 ; Loop until yes
+                00587 
+02B5  FD7E0B    00588         LD      A,(IY+PREDIG$)          ; Display last digit preceding 8s
+02B8  CDEE02    00589         CALL    OUTDIG                  ;
+                00590 
+                00591 ;       WHILE NINES > 0 DO
+                00592 ;       BEGIN
+                00593 ;         OUT( '9' );
+                00594 ;         NINES := NINES - 1;
+                00595 ;       END;
+02BB  FD7E0A    00596         LD      A,(IY+NINES$)           ; Display following 9s if any
+02BE  B7        00597         OR      A                       ;
+02BF  280A      00598         JR      Z,NONINES2              ;
+02C1  3E09      00599 WNINES2 LD      A,9                     ;
+02C3  CDEE02    00600         CALL    OUTDIG                  ;
+02C6  FD350A    00601         DEC     (IY+NINES$)             ;
+02C9  20F6      00602         JR      NZ,WNINES2              ;
+                00603 NONINES2:
+                00604 
+02CB  215003    00605         LD      HL,DONE$                ;
+02CE  CD0D00    00606         CALL    PUTS                    ; Display "Done. Started:"
+02D1  218703    00607         LD      HL,TIME_                ;
+02D4  E5        00608         PUSH    HL                      ;
+02D5  CD6000    00609         CALL    PUTTIME                 ; Display start time
+02D8  216303    00610         LD      HL,ENDED$               ;
+02DB  CD0D00    00611         CALL    PUTS                    ; Display " - Ended: "
+02DE  E1        00612         POP     HL                      ;
+02DF  CD4E00    00613         CALL    READTIME                ; Read end time
+02E2  CD6000    00614         CALL    PUTTIME                 ; Display it
+02E5  214D03    00615         LD      HL,CRLF                 ;
+02E8  CD0D00    00616         CALL    PUTS                    ; do CR-LF
+                00617         
+                00618         ;RET
+02EB  76        00619         HALT                            ; All digits displayed => HALT
+02EC  18FE      00620         JR      $                       ;
+                00621 
+                00622 ;-----------------------------------------------------------------------------
+                00623 ;       Display each digit of Pi, with grouping and new lines
+02EE  C630      00624 OUTDIG: ADD     A,'0'                   ; Convert to ASCII digit
+02F0  CD0400    00625         CALL    PUTCH                   ; Display char
+02F3  FD7E0C    00626         LD      A,(IY+DOT$)             ; Get dot if any
+02F6  FD360C00  00627         LD      (IY+DOT$),0             ; Only once
+02FA  B7        00628         OR      A                       ; Is there a dot ?
+02FB  C40400    00629         CALL    NZ,PUTCH                ; If yes, display it
+02FE  2A8503    00630         LD      HL,(COUNT_)             ; Get counter
+0301  23        00631         INC     HL                      ; Increment it
+0302  228503    00632         LD      (COUNT_),HL             ; Save it
+0305  FD350D    00633         DEC     (IY+GROUP$)             ; Done with group of digits ?
+0308  C0        00634         RET     NZ                      ; ret if yes
+0309  FD360D05  00635         LD      (IY+GROUP$),5           ; reload in-group digits counter
+030D  3E20      00636         LD      A,' '                   ; Display ' ' separator
+030F  CD0400    00637         CALL    PUTCH                   ;
+0312  FD350E    00638         DEC     (IY+GROUPS$)            ; Done with line of groups ?
+0315  C0        00639         RET     NZ                      ; ret if yes
+0316  FD360E0A  00640         LD      (IY+GROUPS$),10         ; Reload groups counter
+031A  217303    00641         LD      HL,COLSEP$              ;
+031D  CD0D00    00642         CALL    PUTS                    ; Display ': '
+0320  2A8503    00643         LD      HL,(COUNT_)             ; Get loop counter
+0323  CD1600    00644         CALL    PUTHL4                  ; Display it
+0326  216E03    00645         LD      HL,NL2SPC$              ; Display NL + 2 spaces
+0329  CD0D00    00646         CALL    PUTS                    ;
+032C  C9        00647         RET                             ; Done
+                00648 
+                00649 ;-----------------------------------------------------------------------------
+                00650 ;       Dialog Messages
+032D            00651 SPIGOT$ $TITLE                          ; Title message
+032D  50692053  00652+        DB      'Pi Spigot - Ver:1.20 - Dec-2019'
+      70 69 67 6F 74 20 2D 20
+      56 65 72 3A 31 2E 32 30
+      20 2D 20 44 65 63 2D 32
+      30 31 39               
+                00653+        ENDM
+034C  0A        00654 LFCRLF: DB      LF
+034D  0D0A00    00655 CRLF:   DB      CR,LF,0                 ;
+                00656 
+0350  0D0A      00657 DONE$   DB      CR,LF
+0352  446F6E65  00658         DB      "Done - Started: ",0    ; Done message
+      20 2D 20 53 74 61 72 74
+      65 64 3A 20 00         
+                00659 
+0363  202D2045  00660 ENDED$  DB      " - Ended: ",0          ;
+      6E 64 65 64 3A 20 00   
+                00661 
+036E  0D0A2020  00662 NL2SPC$ DB      CR,LF,'  ',0            ; New line + 2 spaces
+      00                     
+                00663 
+0373  3A2000    00664 COLSEP$ DB      ': ',0                  ; Colon + space
+                00665 
+                00666 IY0     EQU     $                       ; Base value for IY
+                00667 
+    = 0000      00668 N$      EQU     $-IY0                   ; N = Number of Digits
+0376            00669 N_      DS      2                       ;
+    = 0002      00670 LEN$    EQU     $-IY0                   ; LEN = array length
+0378            00671 LEN_    DS      2                       ;
+    = 0004      00672 I$      EQU     $-IY0                   ; I sub loop counter
+037A            00673 I_      DS      2                       ;
+                00674 J$      EQU     $-IY0                   ; J main loop counter
+037C            00675 J_      DS      2                       ;
+    = 0008      00676 RES$    EQU     $-IY0                   ; RES = quotient
+037E            00677 RES_    DS      2                       ;
+                00678 NINES$  EQU     $-IY0                   ; NINES = 9s counter
+0380            00679 NINES_  DS      1                       ;
+                00680 PREDIG$ EQU     $-IY0                   ; PREDIG = digit preceding 9s
+0381            00681 PREDIG_ DS      1                       ;
+                00682 DOT$    EQU     $-IY0                   ; DOT = dot to display after 1st digit
+0382            00683 DOT_    DS      1                       ;
+                00684 GROUP$  EQU     $-IY0                   ; GROUP = Digits in group counter
+0383            00685 GROUP_  DS      1                       ;
+                00686 GROUPS$ EQU     $-IY0                   ; GROUPS = Groups in line counter
+0384            00687 GROUPS_ DS      1                       ;
+0385            00688 COUNT_  DS      2                       ; COUNT = decimals counter
+0387            00689 TIME_   DS      3                       ; Hold the time
+                00690 
+                00691 
+                00692 ;       DS      1 + low not $           ; go to next 256 bytes boundary
+                00693 ARRAY   EQU     $
+    = 04D7      00694 ARREND  EQU     2*NDIGITS*10/3+ARRAY    ; ensure that enough memory is available
+                00695 
+                00696 ;       ASSERT  ARREND < 0FFF0H
+                00697 
+                00698         END     BOOT
+
+
+ARRAY           038A  ARREND          04D7  BOOT            0000  
+COLSEP$         0373  COUNT_          0385  CR              000D  
+CRLF            034D  DEBUG           0000  DIVHLDE         007F  
+DIVJ2           009A  DIVL1           0081  DIVL2           0090  
+DONE$           0350  DOT$            000C  DOT_            0382  
+ENDED$          0363  ENDIF1          02A2  FORJ            0234  
+GROUP$          000D  GROUPS$         000E  GROUPS_         0384  
+GROUP_          0383  I$              0004  ILELEN          0173  
+IY0             0376  I_              037A  J$              0006  
+J_              037C  LADDHLBC        0137  LADDHLDE        013D  
+LADDHLHL        0143  LDIVHLDE        00A3  LDIVJ0          00B7  
+LDIVJ1          00C9  LDIVJ2          00F7  LDIVL1          00BD  
+LDIVL2          00DF  LEN$            0002  LEN_            0378  
+LF              000A  LFCRLF          034C  LLDBCHL         0130  
+LMULHL10        0149  LMULHLDE16      0109  LMULL1          0116  
+N$              0000  NDIGITS         0032  NINES$          000A  
+NINES_          0380  NL2SPC$         036E  NONINES         02A2  
+NONINES2        02CB  NOZEROS         0281  N_              0376  
+ONELOOP         0159  OUTDIG          02EE  PREDIG$         000B  
+PREDIG_         0381  PUT1A           0040  PUT1A1          0042  
+PUT1HL          002B  PUT1HL1         002D  PUTA1           003C  
+PUTA2           0037  PUTCH           0004  PUTHL1          0033  
+PUTHL4          0016  PUTS            000D  PUTTIME         0060  
+QNOT10          0283  QNOT9           0263  READTIME        004E  
+REPT1           0184  RES$            0008  RES_            037E  
+SPIGOT          01D2  SPIGOT$         032D  SPL01           020F  
+TIME_           0387  WAITKI          0078  WNINES          0298  
+WNINES2         02C1  WZEROS          0278  
