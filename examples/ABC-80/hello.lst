@@ -1,0 +1,929 @@
+                00001 ;  zmac hello.z80  --od hello --oo cim,lst -c -s -g
+                00002 ;  z80asm.exe hello.z80 -cim
+                00003 ;   Convert:
+                00004 ;       python3 conv.py hello.cim > hello.c
+                00005 
+    = 0040      00006 ADDLOW:      EQU     40h 
+    = 0041      00007 DAIN:        EQU     41h 
+    = 0041      00008 DAOT:        EQU     41h 
+    = 0042      00009 ADDHIG:      EQU     42h 
+    = 0042      00010 CONT:        EQU     42h 
+    = 0043      00011 Q8255:       EQU     43h 
+    = 0080      00012 PWCODE:      EQU     80h 
+    = 0080      00013 KIN:         EQU     80h 
+    = 0082      00014 DIGIT:       EQU     82h 
+    = 0081      00015 SEG7:        EQU     81h 
+    = 0083      00016 P8255:       EQU     83h 
+    = 002A      00017 MIDPD:       EQU     2Ah 
+    = 17BF      00018 SYSSTK:      EQU     17bfh 
+    = 17BF      00019 STEPBF:      EQU     17bfh 
+    = 17C6      00020 DISPBF:      EQU     17c6h 
+    = 17EF      00021 ADSAVE:      EQU     17efh 
+    = 17F3      00022 STMONI:      EQU     17f3h 
+    = 17F4      00023 STATE:       EQU     17f4h 
+    = 17F5      00024 PWUP:        EQU     17F5h 
+    = 17F6      00025 TEST:        EQU     17f6h 
+    = 17FA      00026 TEMP:        EQU     17fah 
+                00027 ; 
+                00028                         
+                00029             ORG    0000H 
+                00030 RSTO:                
+0000  0600      00031             LD      B,00H 
+0002  10FE      00032             DJNZ    $ 
+0004  C37000    00033             JP      BEGIN 
+                00034 ; 
+                00035                         
+                00036             ORG    0070h 
+                00037 BEGIN:               
+0070  3E90      00038             LD      A,90H 
+0072  D383      00039             OUT     (P8255),A 
+0074  3EFF      00040             LD      A,0FFH 
+0076  D382      00041             OUT     (DIGIT),A 
+0078  31BF17    00042             LD      SP,SYSSTK 
+007B  3AF517    00043             LD      A,(PWUP) 
+007E  FE80      00044             CP      PWCODE 
+0080  C44C05    00045             CALL    NZ,INIT 
+0083  CD4405    00046             CALL    RSTMU 
+0086  210010    00047             LD      HL,1000H 
+0089  22EF17    00048             LD      (ADSAVE),HL 
+008C  AF        00049             XOR     A 
+008D  32F617    00050             LD      (TEST),A 
+0090  DD21BF07  00051             LD      IX,DISP 
+                00052 ; 
+0094  AF        00053 SETSTO:     XOR     A 
+0095  32F417    00054             LD      (STATE),A 
+0098  00        00055             NOP      
+0099  00        00056             NOP      
+009A  00        00057             NOP      
+009B  CDA604    00058 MAIN:       CALL    SCD_K 
+009E  CD6404    00059             CALL    MS3K1_ 
+00A1  CDA900    00060             CALL    CHKEY 
+00A4  18F5      00061             JR      MAIN 
+                00062             ORG    00a9h 
+00A9  FE10      00063 CHKEY:      CP      10H 
+00AB  3827      00064             JR      C,KHEX 
+00AD  21F617    00065             LD      HL,TEST 
+00B0  CBC6      00066             SET     0,(HL) 
+00B2  D610      00067             SUB     10H 
+00B4  FE04      00068             CP      04H 
+00B6  212507    00069             LD      HL,SUBFUN 
+00B9  DA6A03    00070             JP      C,BRANCH 
+00BC  DD21C617  00071             LD      IX,DISPBF 
+00C0  D602      00072             SUB     02H 
+00C2  21F417    00073             LD      HL,STATE 
+00C5  77        00074             LD      (HL),A 
+00C6  21F317    00075             LD      HL,STMONI 
+00C9  3600      00076             LD      (HL),00H 
+00CB  212B07    00077             LD      HL,FUNC 
+00CE  D602      00078             SUB     02H 
+00D0  C36A03    00079             JP      BRANCH 
+                00080             ORG    00d4h 
+00D4  4F        00081 KHEX:       LD      C,A 
+00D5  213007    00082             LD      HL,HTAB 
+00D8  3AF417    00083 PREBR:      LD      A,(STATE) 
+00DB  C36A03    00084             JP      BRANCH 
+00DE  213707    00085 KINC:       LD      HL,ITAB 
+00E1  18F5      00086             JR      PREBR 
+00E3  213E07    00087 KDEC:       LD      HL,DTAB 
+00E6  18F0      00088             JR      PREBR 
+00E8  214507    00089 KEXEC:      LD      HL,ETAB 
+00EB  18EB      00090             JR      PREBR 
+00ED  CD3705    00091 KDATA:      CALL    TESTM 
+00F0  CD9B03    00092             CALL    DFORM2 
+00F3  C9        00093             RET      
+00F4  CD9203    00094 KADRS:      CALL    DFORM1 
+00F7  C9        00095             RET      
+00F8  CDB903    00096 KTAPWR:     CALL    STEPDP 
+00FB  C9        00097             RET      
+                00098             ORG    00ffh 
+00FF  C37503    00099 HFIX:       JP      ERRDIS 
+0102  2AEF17    00100 HDA:        LD      HL,(ADSAVE) 
+0105  CD9D04    00101             CALL    RAMCHK 
+0108  C27503    00102             JP      NZ,ERRDIS 
+010B  CD7C03    00103             CALL    CL1BYT 
+010E  79        00104             LD      A,C 
+010F  ED6F      00105             RLD      
+0111  CD9B03    00106             CALL    DFORM2 
+0114  C9        00107             RET      
+                00108             ORG    0116h 
+0116  21EF17    00109 HAD:        LD      HL,ADSAVE 
+0119  CD8903    00110             CALL    CL2BYT 
+011C  79        00111             LD      A,C 
+011D  ED6F      00112             RLD      
+011F  23        00113             INC     HL 
+0120  ED6F      00114             RLD      
+0122  CD9203    00115             CALL    DFORM1 
+0125  C9        00116             RET      
+                00117             ORG    0127h 
+0127  CDD503    00118 HTAPWR:     CALL    GTPALC 
+012A  CD8903    00119             CALL    CL2BYT 
+012D  79        00120             LD      A,C 
+012E  ED6F      00121             RLD      
+0130  23        00122             INC     HL 
+0131  ED6F      00123             RLD      
+0133  CDB903    00124             CALL    STEPDP 
+0136  C9        00125             RET      
+                00126             ORG    013ah 
+013A  C37503    00127 IFIX:       JP      ERRDIS 
+013D  2AEF17    00128 ADRADD:     LD      HL,(ADSAVE) 
+0140  23        00129             INC     HL 
+0141  22EF17    00130             LD      (ADSAVE),HL 
+0144  CD9B03    00131             CALL    DFORM2 
+0147  C9        00132             RET      
+                00133             ORG    0149h 
+0149  21F317    00134 TPFUN1:     LD      HL,STMONI 
+014C  34        00135             INC     (HL) 
+014D  CDE003    00136             CALL    GTPANA 
+0150  2004      00137             JR      NZ,ISTEP 
+0152  35        00138             DEC     (HL) 
+0153  C37503    00139             JP      ERRDIS 
+0156  CDB903    00140 ISTEP:      CALL    STEPDP 
+0159  C9        00141             RET      
+                00142             ORG    015dh 
+015D  C37503    00143 DFIX:       JP      ERRDIS 
+0160  2AEF17    00144 ADRDEC:     LD      HL,(ADSAVE) 
+0163  2B        00145             DEC     HL 
+0164  22EF17    00146             LD      (ADSAVE),HL 
+0167  CD9B03    00147             CALL    DFORM2 
+016A  C9        00148             RET      
+                00149             ORG    016ch 
+016C  21F317    00150 TPFUN2:     LD      HL,STMONI 
+016F  35        00151             DEC     (HL) 
+0170  CDE003    00152             CALL    GTPANA 
+0173  2004      00153             JR      NZ,DSTEP 
+0175  34        00154             INC     (HL) 
+0176  C37503    00155             JP      ERRDIS 
+0179  CDB903    00156 DSTEP:      CALL    STEPDP 
+017C  C9        00157             RET      
+                00158             ORG    0180h 
+0180  C37503    00159 EFIX:       JP      ERRDIS 
+0183  E5        00160 ADREXC:     PUSH    HL 
+0184  2AEF17    00161             LD      hl,(ADSAVE) 
+0187  E3        00162             EX      (SP),HL 
+0188  C9        00163             RET      
+                00164             ORG    018ah 
+018A  ED53EF17  00165 ENDFUN:     LD      (ADSAVE),DE 
+018E  CD9B03    00166             CALL    DFORM2 
+0191  C9        00167             RET      
+                00168             ORG    0193h 
+0193  CD8F04    00169 EWT:        CALL    SUM 
+0196  382B      00170             JR      C,ERROR 
+0198  32C517    00171             LD      (17C5h),A 
+019B  21A00F    00172             LD      HL,0FA0H 
+019E  CD7004    00173             CALL    MS1K 
+01A1  21BF17    00174             LD      HL,STEPBF 
+01A4  010700    00175             LD      BC,0007H 
+01A7  CD3003    00176             CALL    TAPOUT 
+01AA  21A00F    00177             LD      HL,0FA0H 
+01AD  CD7504    00178             CALL    MS2K 
+01B0  CDBB02    00179             CALL    GETPTR 
+01B3  CD3003    00180             CALL    TAPOUT 
+01B6  21A00F    00181             LD      HL,0FA0H 
+01B9  CD7504    00182             CALL    MS2K 
+01BC  ED5BC317  00183 ENDTAP:     LD      DE,(17C3H) 
+01C0  18C8      00184             JR      ENDFUN 
+                00185             ORG    01c3h 
+01C3  DD213F02  00186 ERROR:      LD      IX,ERR 
+01C7  C39400    00187             JP      SETSTO 
+                00188             ORG    01ceh 
+01CE  2ABF17    00189 EPT:        LD      HL,(STEPBF) 
+01D1  22FA17    00190             LD      (TEMP),HL 
+01D4  3EBF      00191 LEAD:       LD      A,0BFH 
+01D6  D381      00192             OUT     (SEG7),A 
+01D8  21E803    00193             LD      HL,1000 
+01DB  CD1403    00194 LEAD1:      CALL    PERIOD 
+01DE  38F4      00195             JR      C,LEAD 
+01E0  2B        00196             DEC     HL 
+01E1  7C        00197             LD      A,H 
+01E2  B5        00198             OR      L 
+01E3  20F6      00199             JR      NZ,LEAD1 
+01E5  CD1403    00200 LEAD2:      CALL    PERIOD 
+01E8  30FB      00201             JR      NC,LEAD2 
+01EA  21BF17    00202             LD      HL,STEPBF 
+01ED  010700    00203             LD      BC,7 
+01F0  CDCF02    00204             CALL    TAPEIN 
+01F3  38DF      00205             JR      C,LEAD 
+01F5  ED5BBF17  00206             LD      DE,(STEPBF) 
+01F9  CD0405    00207             CALL    ADRSDP 
+01FC  0696      00208             LD      B,150 
+01FE  CDCD04    00209 FILEDP:     CALL    SCD_K1 
+0201  10FB      00210             DJNZ    FILEDP 
+0203  21FA17    00211             LD      HL,TEMP 
+0206  B7        00212             OR      A 
+0207  ED52      00213             SBC     HL,DE 
+0209  20C9      00214             JR      NZ,LEAD 
+020B  3EFD      00215             LD      A,11111101B 
+020D  D381      00216             OUT     (SEG7),A 
+020F  CDBB02    00217             CALL    GETPTR 
+0212  38AF      00218             JR      C,ERROR 
+0214  CDCF02    00219             CALL    TAPEIN 
+0217  38AA      00220             JR      C,ERROR 
+0219  CD8F04    00221             CALL    SUM 
+021C  21C517    00222             LD      HL,17C5H 
+021F  BE        00223             CP      (HL) 
+0220  20A1      00224             JR      NZ,ERROR 
+0222  1898      00225             JR      ENDTAP 
+                00226             ORG    0227h 
+0227  DD21C617  00227 WR2716:     LD      IX,DISPBF 
+022B  C5        00228             PUSH    BC 
+022C  E5        00229             PUSH    HL 
+022D  EB        00230             EX      DE,HL 
+022E  B7        00231             OR      A 
+022F  ED42      00232             SBC     HL,BC 
+0231  4D        00233             LD      C,L 
+0232  44        00234             LD      B,H 
+0233  1100F0    00235             LD      DE,0F000H 
+0236  19        00236             ADD     HL,DE 
+0237  3806      00237             JR      C,ERR 
+0239  E1        00238             POP     HL 
+023A  E5        00239             PUSH    HL 
+023B  19        00240             ADD     HL,DE 
+023C  3801      00241             JR      C,ERR 
+023E  09        00242             ADD     HL,BC 
+023F  DAC301    00243 ERR:        JP      C,ERROR 
+0242  03        00244             INC     BC 
+0243  D1        00245             POP     DE 
+0244  E1        00246             POP     HL 
+0245  3D        00247             DEC     A 
+0246  2805      00248             JR      Z,TBLANK 
+0248  3D        00249             DEC     A 
+0249  2814      00250             JR      Z,PROG 
+024B  1821      00251             JR      VERIFY 
+024D  D5        00252 TBLANK:     PUSH    DE 
+024E  C5        00253             PUSH    BC 
+024F  CD7E02    00254 LOOP1:      CALL    DATAIN 
+0252  FEFF      00255             CP      0FFH 
+0254  2801      00256             JR      Z,TESTNE 
+0256  76        00257             HALT     
+0257  13        00258 TESTNE:     INC     DE 
+0258  0B        00259             DEC     BC 
+0259  78        00260             LD      A,B 
+025A  B1        00261             OR      C 
+025B  20F2      00262             JR      NZ,LOOP1 
+025D  C1        00263             POP     BC 
+025E  D1        00264             POP     DE 
+025F  E5        00265 PROG:       PUSH    HL 
+0260  D5        00266             PUSH    DE 
+0261  C5        00267             PUSH    BC 
+0262  CD9002    00268 LOOP2:      CALL    BURN 
+0265  13        00269             INC     DE 
+0266  EDA1      00270             CPI      
+0268  EA6202    00271             JP      PE,LOOP2 
+026B  C1        00272             POP     BC 
+026C  D1        00273             POP     DE 
+026D  E1        00274             POP     HL 
+026E  CD7E02    00275 VERIFY:     CALL    DATAIN 
+0271  EDA1      00276             CPI      
+0273  2801      00277             JR      Z,VNEXT 
+0275  76        00278             HALT     
+0276  13        00279 VNEXT:      INC     DE 
+0277  EA6E02    00280             JP      PE,VERIFY 
+027A  C7        00281             RST     0 
+                00282             ORG    027eh 
+027E  3E82      00283 DATAIN:     LD      A,82H 
+0280  D343      00284             OUT     (Q8255),A 
+0282  7B        00285             LD      A,E 
+0283  D340      00286             OUT     (ADDLOW),A 
+0285  7A        00287             LD      A,D 
+0286  E607      00288             AND     7 
+0288  CBFF      00289             SET     7,A 
+028A  D342      00290             OUT     (ADDHIG),A 
+028C  DB41      00291             IN      A,(DAIN) 
+028E  C9        00292             RET      
+                00293             ORG    0290h 
+0290  C5        00294 BURN:       PUSH    BC 
+0291  E5        00295             PUSH    HL 
+0292  3E80      00296             LD      A,80H 
+0294  D343      00297             OUT     (Q8255),A 
+0296  7E        00298             LD      A,(HL) 
+0297  D341      00299             OUT     (DAOT),A 
+0299  7B        00300             LD      A,E 
+029A  D340      00301             OUT     (ADDLOW),A 
+029C  7A        00302             LD      A,D 
+029D  E607      00303             AND     7 
+029F  D342      00304             OUT     (ADDHIG),A 
+02A1  4F        00305             LD      C,A 
+02A2  F660      00306             OR      60H 
+02A4  D342      00307             OUT     (CONT),A 
+02A6  7E        00308             LD      A,(HL) 
+02A7  CD1105    00309             CALL    DADP 
+02AA  CD0405    00310             CALL    ADRSDP 
+02AD  0605      00311             LD      B,5 
+02AF  CDCD04    00312 DE50MS:     CALL    SCD_K1 
+02B2  10FB      00313             DJNZ    DE50MS 
+02B4  79        00314             LD      A,C 
+02B5  D342      00315             OUT     (ADDHIG),A 
+02B7  E1        00316             POP     HL 
+02B8  C1        00317             POP     BC 
+02B9  C9        00318             RET      
+                00319             ORG    02bbh 
+02BB  21C117    00320 GETPTR:     LD      HL,17C1H 
+02BE  5E        00321 GETP:       LD      E,(HL) 
+02BF  23        00322             INC     HL 
+02C0  56        00323             LD      D,(HL) 
+02C1  23        00324             INC     HL 
+02C2  4E        00325             LD      C,(HL) 
+02C3  23        00326             INC     HL 
+02C4  66        00327             LD      H,(HL) 
+02C5  69        00328             LD      L,C 
+02C6  B7        00329             OR      A 
+02C7  ED52      00330             SBC     HL,DE 
+02C9  4D        00331             LD      C,L 
+02CA  44        00332             LD      B,H 
+02CB  03        00333             INC     BC 
+02CC  EB        00334             EX      DE,HL 
+02CD  C9        00335             RET      
+                00336             ORG    02cfh 
+02CF  AF        00337 TAPEIN:     XOR     A 
+02D0  08        00338             EX      AF,AF' 
+02D1  CDDD02    00339 TLOOP:      CALL    GTBYTE 
+02D4  73        00340             LD      (HL),E 
+02D5  EDA1      00341             CPI      
+02D7  EAD102    00342             JP      PE,TLOOP 
+02DA  08        00343             EX      AF,AF' 
+02DB  C9        00344             RET      
+                00345             ORG    02ddh 
+02DD  CDEF02    00346 GTBYTE:     CALL    GETBIT 
+02E0  1608      00347             LD      D,08H 
+02E2  CDEF02    00348 GLOOP:      CALL    GETBIT 
+02E5  CB1B      00349             RR      E 
+02E7  15        00350             DEC     D 
+02E8  20F8      00351             JR      NZ,GLOOP 
+02EA  CDEF02    00352             CALL    GETBIT 
+02ED  C9        00353             RET      
+                00354             ORG    02efh 
+02EF  D9        00355 GETBIT:     EXX      
+02F0  210000    00356             LD      HL,0000H 
+02F3  CD1403    00357 COUNT:      CALL    PERIOD 
+02F6  14        00358             INC     D 
+02F7  15        00359             DEC     D 
+02F8  2012      00360             JR      NZ,TERR 
+02FA  3806      00361             JR      C,SHORTP 
+02FC  2D        00362             DEC     L 
+02FD  2D        00363             DEC     L 
+02FE  CBC4      00364             SET     0,H 
+0300  18F1      00365             JR      COUNT 
+0302  2C        00366 SHORTP:     INC     L 
+0303  CB44      00367             BIT     0,H 
+0305  28EC      00368             JR      Z,COUNT 
+0307  CB15      00369             RL      L 
+0309  D9        00370             EXX      
+030A  C9        00371             RET      
+                00372             ORG    030ch 
+030C  08        00373 TERR:       EX      AF,AF' 
+030D  37        00374             SCF      
+030E  08        00375             EX      AF,AF' 
+030F  D9        00376             EXX      
+0310  C9        00377             RET      
+                00378             ORG    0314h 
+0314  110000    00379 PERIOD:     LD      DE,0000H 
+0317  DB80      00380 CHKO:       IN      A,(KIN) 
+0319  13        00381             INC     DE 
+031A  17        00382             RLA      
+031B  38FA      00383             JR      C,CHKO 
+031D  3E40      00384             LD      A,01000000B 
+031F  D382      00385             OUT     (DIGIT),A 
+0321  DB80      00386 CHK1:       IN      A,(KIN) 
+0323  13        00387             INC     DE 
+0324  17        00388             RLA      
+0325  30FA      00389             JR      NC,CHK1 
+0327  3EC0      00390             LD      A,0C0H 
+0329  D382      00391             OUT     (DIGIT),A 
+032B  7B        00392             LD      A,E 
+032C  FE2A      00393             CP      MIDPD 
+032E  C9        00394             RET      
+                00395             ORG    0330h 
+0330  5E        00396 TAPOUT:     LD      E,(HL) 
+0331  CD3B03    00397             CALL    OTBYTE 
+0334  EDA1      00398             CPI      
+0336  EA3003    00399             JP      PE,TAPOUT 
+0339  C9        00400             RET      
+                00401             ORG    033bh 
+033B  1608      00402 OTBYTE:     LD      D,08H 
+033D  B7        00403             OR      A 
+033E  CD4F03    00404             CALL    OUTBIT 
+0341  CB1B      00405 OLOOP:      RR      E 
+0343  CD4F03    00406             CALL    OUTBIT 
+0346  15        00407             DEC     D 
+0347  20F8      00408             JR      NZ,OLOOP 
+0349  37        00409             SCF      
+034A  CD4F03    00410             CALL    OUTBIT 
+034D  C9        00411             RET      
+                00412             ORG    034fh 
+034F  D9        00413 OUTBIT:     EXX      
+0350  2600      00414             LD      H,00H 
+0352  3809      00415             JR      C,OUT1 
+0354  2E0C      00416 OUT0:       LD      L,0CH 
+0356  CD7504    00417             CALL    MS2K 
+0359  2E03      00418             LD      L,03H 
+035B  1807      00419             JR      BITEND 
+035D  2E06      00420 OUT1:       LD      L,06H 
+035F  CD7504    00421             CALL    MS2K 
+0362  2E06      00422             LD      L,06H 
+0364  CD7004    00423 BITEND:     CALL    MS1K 
+0367  D9        00424             EXX      
+0368  C9        00425             RET      
+                00426 
+                00427             ORG    036ah 
+                00428 BRANCH:              
+036A  5E        00429             LD      E,(HL) 
+036B  23        00430             INC     HL 
+036C  56        00431             LD      D,(HL) 
+036D  23        00432             INC     HL 
+036E  85        00433             ADD     A,L 
+036F  6F        00434             LD      L,A 
+0370  6E        00435             LD      L,(HL) 
+0371  2600      00436             LD      H,00H 
+0373  19        00437             ADD     HL,DE 
+0374  E9        00438             JP      (HL) 
+                00439 
+                00440             ORG    0375h 
+                00441 ERRDIS:              
+0375  21F617    00442             LD      HL,TEST 
+0378  CBFE      00443             SET     7,(HL) 
+037A  C9        00444             RET      
+                00445             ORG    037ch 
+                00446 CL1BYT:              
+037C  3AF617    00447             LD      A,(TEST) 
+037F  B7        00448             OR      A 
+0380  C8        00449             RET     Z 
+0381  3E00      00450             LD      A,00H 
+0383  77        00451             LD      (HL),A 
+0384  32F617    00452             LD      (TEST),A 
+0387  C9        00453             RET      
+                00454             ORG    0389h 
+                00455 CL2BYT:              
+0389  CD7C03    00456             CALL    CL1BYT 
+038C  C8        00457             RET     Z 
+038D  23        00458             INC     HL 
+038E  77        00459             LD      (HL),A 
+038F  2B        00460             DEC     HL 
+0390  C9        00461             RET      
+                00462             ORG    0392h 
+                00463 DFORM1:              
+0392  3E01      00464             LD      A,01H 
+0394  0604      00465             LD      B,04H 
+0396  21C817    00466             LD      HL,17C8H 
+0399  1807      00467             JR      SAV12 
+                00468             ORG    039Bh 
+                00469 DFORM2:              
+039B  3E02      00470             LD      A,02H 
+039D  0602      00471             LD      B,02H 
+039F  21C617    00472             LD      HL,DISPBF 
+03A2  32F417    00473 SAV12:      LD      (STATE),A 
+03A5  D9        00474             EXX      
+03A6  ED5BEF17  00475             LD      DE,(ADSAVE) 
+03AA  CD0405    00476             CALL    ADRSDP 
+03AD  1A        00477             LD      A,(DE) 
+03AE  CD1105    00478             CALL    DADP 
+03B1  D9        00479             EXX      
+03B2  CBF6      00480 SETPT:      SET     6,(HL) 
+03B4  23        00481             INC     HL 
+03B5  10FB      00482             DJNZ    SETPT 
+03B7  C9        00483             RET      
+                00484             ORG    03b9h 
+                00485 STEPDP:              
+03B9  CDD503    00486             CALL    GTPALC 
+03BC  5E        00487             LD      E,(HL) 
+03BD  23        00488             INC     HL 
+03BE  56        00489             LD      D,(HL) 
+03BF  CD0405    00490             CALL    ADRSDP 
+03C2  21C817    00491             LD      HL,17C8H 
+03C5  0604      00492             LD      B,04H 
+03C7  CDB203    00493             CALL    SETPT 
+03CA  CDE003    00494             CALL    GTPANA 
+03CD  6F        00495             LD      L,A 
+03CE  2602      00496             LD      H,02H 
+03D0  22C617    00497             LD      (DISPBF),HL 
+03D3  C9        00498             RET      
+                00499             ORG    03d5h 
+                00500 GTPALC:              
+03D5  3AF317    00501             LD      A,(STMONI) 
+03D8  87        00502             ADD     A,A 
+03D9  21BF17    00503             LD      HL,STEPBF 
+03DC  85        00504             ADD     A,L 
+03DD  6F        00505             LD      L,A 
+03DE  C9        00506             RET      
+                00507             ORG    03e0h 
+                00508 GTPANA:              
+03E0  3AF417    00509             LD      A,(STATE) 
+03E3  D601      00510             SUB     01H 
+03E5  87        00511             ADD     A,A 
+03E6  87        00512             ADD     A,A 
+03E7  11E007    00513             LD      DE,BLANK 
+03EA  83        00514             ADD     A,E 
+03EB  5F        00515             LD      E,A 
+03EC  3AF317    00516             LD      A,(STMONI) 
+03EF  83        00517             ADD     A,E 
+03F0  5F        00518             LD      E,A 
+03F1  1A        00519             LD      A,(DE) 
+03F2  B7        00520             OR      A 
+03F3  C9        00521             RET      
+                00522             ORG    03f6h 
+03F6  DD21D307  00523 INIDP:      LD      IX,INITAB 
+03FA  0E15      00524             LD      C,15H 
+03FC  0620      00525 INIDP1:     LD      B,20H 
+03FE  CDCD04    00526 INIDP2:     CALL    SCD_K1 
+0401  10FB      00527             DJNZ    INIDP2 
+0403  DD2B      00528             DEC     IX 
+0405  CD6404    00529             CALL    MS3K1_ 
+0408  0D        00530             DEC     C 
+0409  20F1      00531             JR      NZ,INIDP1 
+040B  C9        00532             RET      
+                00533 
+                00534             ORG    040dh 
+040D  FD215805  00535 MONSOU:     LD      IY,SONG 
+                00536 
+                00537 
+0411  FDE5      00538 MUSIC:      PUSH    IY 
+0413  DDE1      00539             POP     IX 
+0415  DD7E00    00540             LD      A,(IX+0) 
+0418  87        00541             ADD     A,A 
+0419  3830      00542             JR      C,STOP 
+041B  FA1104    00543             JP      M,MUSIC 
+041E  00        00544             NOP      
+041F  00        00545             NOP      
+0420  CB77      00546             BIT     6,A 
+0422  2002      00547             JR      NZ,PLAY 
+0424  CBF9      00548             SET     7,C 
+0426  E63F      00549 PLAY:       AND     3FH 
+0428  214C07    00550             LD      HL,FREQTAB 
+042B  85        00551             ADD     A,L 
+042C  6F        00552             LD      L,A 
+042D  5E        00553             LD      E,(HL) 
+042E  23        00554             INC     HL 
+042F  56        00555             LD      D,(HL) 
+0430  DD23      00556             INC     IX 
+0432  DD6600    00557             LD      H,(IX+0) 
+0435  3EFF      00558             LD      A,0FFH 
+0437  6A        00559 TONE:       LD      L,D 
+0438  D382      00560 TONOUT:     OUT     (DIGIT),A 
+043A  43        00561             LD      B,E 
+043B  00        00562 DELAY:      NOP      
+043C  00        00563             NOP      
+043D  00        00564             NOP      
+043E  10FB      00565             DJNZ    DELAY 
+0440  A9        00566             XOR     C 
+0441  2D        00567             DEC     L 
+0442  20F4      00568             JR      NZ,TONOUT 
+0444  25        00569             DEC     H 
+0445  20F0      00570             JR      NZ,TONE 
+0447  DD23      00571             INC     IX 
+0449  18CA      00572             JR      MUSIC+4 
+                00573 STOP:                
+044B  C9        00574             RET      
+                00575             ORG    0450H 
+                00576 MS1K1_:              
+0450  D9        00577             EXX      
+0451  215000    00578             LD      HL,0050H 
+0454  CD7004    00579             CALL    MS1K 
+0457  D9        00580             EXX      
+0458  C9        00581             RET      
+                00582             ORG    045ah 
+                00583 MS2K1_:              
+045A  D9        00584             EXX      
+045B  21A000    00585             LD      HL,00A0H 
+045E  CD7504    00586             CALL    MS2K 
+0461  D9        00587             EXX      
+0462  C9        00588             RET      
+                00589             ORG    0464h 
+0464  08        00590 MS3K1_:     EX      AF,AF' 
+0465  D9        00591             EXX      
+0466  21E000    00592             LD      HL,00E0H 
+0469  CD7A04    00593             CALL    MS3K 
+046C  D9        00594             EXX      
+046D  08        00595             EX      AF,AF' 
+046E  C9        00596             RET      
+                00597 
+                00598 
+                00599             ORG    0470h 
+                00600 MS1K:                
+0470  0E41      00601             LD      C,41H 
+0472  1808      00602             JR      SOUND 
+                00603             ORG    0475h 
+                00604 MS2K:                
+0475  0E1F      00605             LD      C,1FH 
+0477  1803      00606             JR      SOUND 
+                00607             ORG    047ah 
+                00608 MS3K:                
+047A  0E0C      00609             LD      C,0CH 
+                00610             ORG    047ch 
+047C  29        00611 SOUND:      ADD     HL,HL 
+047D  110100    00612             LD      DE,0001H 
+0480  3EFF      00613             LD      A,0FFH 
+0482  D382      00614 SQWAVE:     OUT     (DIGIT),A 
+0484  41        00615             LD      B,C 
+0485  10FE      00616             DJNZ    $ 
+0487  EE80      00617             XOR     80H 
+0489  ED52      00618             SBC     HL,DE 
+048B  20F5      00619             JR      NZ,SQWAVE 
+048D  C9        00620             RET      
+                00621             ORG    048fh 
+048F  CDBB02    00622 SUM:        CALL    GETPTR 
+0492  D8        00623             RET     C 
+0493  AF        00624             XOR     A 
+0494  86        00625 SUMCAL:     ADD     A,(HL) 
+0495  EDA1      00626             CPI      
+0497  EA9404    00627             JP      PE,SUMCAL 
+049A  B7        00628             OR      A 
+049B  C9        00629             RET      
+                00630             ORG    049dh 
+049D  7E        00631 RAMCHK:     LD      A,(HL) 
+049E  2F        00632             CPL      
+049F  77        00633             LD      (HL),A 
+04A0  7E        00634             LD      A,(HL) 
+04A1  2F        00635             CPL      
+04A2  77        00636             LD      (HL),A 
+04A3  BE        00637             CP      (HL) 
+04A4  C9        00638             RET      
+                00639 
+                00640             ORG    04A6h 
+                00641 SCD_K:               
+04A6  DDE5      00642             PUSH    IX 
+04A8  21F617    00643             LD      HL,TEST 
+04AB  CB7E      00644             BIT     7,(HL) 
+04AD  2804      00645             JR      Z,SCPRE 
+04AF  DD21D907  00646             LD      IX,_ERR 
+04B3  0604      00647 SCPRE:      LD      B,04H 
+04B5  CDCD04    00648 SCNX:       CALL    SCD_K1 
+04B8  30F9      00649             JR      NC,SCPRE 
+04BA  10F9      00650             DJNZ    SCNX 
+04BC  CBBE      00651             RES     7,(HL) 
+04BE  DDE1      00652             POP     IX 
+04C0  CDCD04    00653 SCLOOP:     CALL    SCD_K1 
+04C3  38FB      00654             JR      C,SCLOOP 
+04C5  218C07    00655 KEYMAP:     LD      HL,MAP 
+04C8  85        00656             ADD     A,L 
+04C9  6F        00657             LD      L,A 
+04CA  7E        00658             LD      A,(HL) 
+04CB  C9        00659             RET      
+                00660             ORG    04cdh 
+                00661 SCD_K1:              
+04CD  37        00662             SCF      
+04CE  08        00663             EX      AF,AF' 
+04CF  D9        00664             EXX      
+04D0  0E00      00665             LD      C,00H 
+04D2  1EFE      00666             LD      E,0FEH 
+04D4  DD7E00    00667 KCOL:       LD      A,(IX+0) 
+04D7  00        00668             NOP;CPL
+04D8  D381      00669             OUT     (SEG7),A 
+04DA  7B        00670             LD      A,E 
+04DB  D382      00671             OUT     (DIGIT),A 
+04DD  0609      00672             LD      B,009H 
+04DF  10FE      00673             DJNZ    $ 
+04E1  0606      00674             LD      B,06H 
+04E3  DB80      00675             IN      A,(KIN) 
+04E5  57        00676             LD      D,A 
+04E6  CB1A      00677 KROW:       RR      D 
+04E8  3802      00678             JR      C,NOKEY 
+04EA  79        00679             LD      A,C 
+04EB  08        00680             EX      AF,AF' 
+04EC  0C        00681 NOKEY:      INC     C 
+04ED  10F7      00682             DJNZ    KROW 
+04EF  DD23      00683             INC     IX 
+04F1  CB03      00684             RLC     E 
+04F3  3EFF      00685             LD      A,0FFH 
+04F5  D382      00686             OUT     (DIGIT),A 
+04F7  CB73      00687             BIT     6,E 
+04F9  20D9      00688             JR      NZ,KCOL 
+04FB  11FAFF    00689             LD      DE,-6 
+04FE  DD19      00690             ADD     IX,DE 
+0500  D9        00691             EXX      
+0501  08        00692             EX      AF,AF' 
+0502  C9        00693             RET      
+                00694             ORG    0504h 
+                00695 ADRSDP:              
+0504  21C817    00696             LD      HL,17C8H 
+0507  7B        00697             LD      A,E 
+0508  CD2505    00698             CALL    BYSEG2 
+050B  7A        00699             LD      A,D 
+050C  CD2505    00700             CALL    BYSEG2 
+050F  C9        00701             RET      
+                00702             ORG    0511h 
+                00703 DADP:                
+0511  21C617    00704             LD      HL,DISPBF 
+0514  CD2505    00705             CALL    BYSEG2 
+0517  C9        00706             RET      
+                00707             ORG    0519h 
+0519  E5        00708 BYSEG1:     PUSH    HL 
+051A  21F007    00709             LD      HL,SEGTAB 
+051D  E60F      00710             AND     0FH 
+051F  85        00711             ADD     A,L 
+0520  6F        00712             LD      L,A 
+0521  7E        00713             LD      A,(HL) 
+0522  E1        00714             POP     HL 
+0523  C9        00715             RET      
+                00716             ORG    0525h 
+0525  F5        00717 BYSEG2:     PUSH    AF 
+0526  CD1905    00718             CALL    BYSEG1 
+0529  77        00719             LD      (HL),A 
+052A  23        00720             INC     HL 
+052B  F1        00721             POP     AF 
+052C  0F        00722             RRCA     
+052D  0F        00723             RRCA     
+052E  0F        00724             RRCA     
+052F  0F        00725             RRCA     
+0530  CD1905    00726             CALL    BYSEG1 
+0533  77        00727             LD      (HL),A 
+0534  23        00728             INC     HL 
+0535  C9        00729             RET      
+                00730             ORG    0537h 
+                00731 TESTM:               
+0537  3AF417    00732             LD      A,(STATE) 
+053A  FE01      00733             CP      01H 
+053C  C8        00734             RET     Z 
+053D  FE02      00735             CP      02H 
+053F  C8        00736             RET     Z 
+0540  E1        00737             POP     HL 
+0541  C37503    00738             JP      ERRDIS 
+                00739             ORG    0544h 
+                00740 RSTMU:               
+0544  FD21F205  00741             LD      IY,RMUSIC 
+0548  CD1104    00742             CALL    MUSIC 
+054B  C9        00743             RET      
+                00744 ; 
+                00745             ORG    054ch 
+                00746 INIT:                
+054C  CDF603    00747             CALL    INIDP 
+054F  CD0D04    00748             CALL    MONSOU 
+0552  3E80      00749             LD      A,PWCODE 
+0554  32F517    00750             LD      (PWUP),A 
+0557  C9        00751             RET      
+                00752 ; 
+                00753             ORG    0558h 
+                00754 SONG:
+0558  11041304  00755                         db 11h,  04h,  13h,  04h,  15h,  04h,  11h,  04h,  11h,  04h,  13h,  04h,  15h,  04h,  11h,  04h
+      15 04 11 04 11 04 13 04
+      15 04 11 04            
+0568  15041604  00756                         db 15h, 04h, 16h, 04h, 18h, 04h, 20h, 04h, 15h, 04h, 16h, 04h, 18h, 04h, 20h, 04h
+      18 04 20 04 15 04 16 04
+      18 04 20 04            
+0578  18021A02  00757                         db 18h, 02h, 1Ah, 02h, 18h, 02h, 16h, 02h, 15h, 04h, 11h, 04h, 18h, 02h, 1Ah, 02h
+      18 02 16 02 15 04 11 04
+      18 02 1A 02            
+0588  18021602  00758                         db 18h, 02h, 16h, 02h, 15h, 04h, 11h, 04h, 11h, 04h, 0Ch, 04h, 11h, 04h, 20h, 04h
+      15 04 11 04 11 04 0C 04
+      11 04 20 04            
+0598  11040C04  00759                         db 11h, 04h, 0Ch, 04h, 11h, 04h, 20h, 04h, 80h
+      11 04 20 04 80         
+                00760 ;                       db 10h, 01h, 11h, 01h, 10h, 01h, 0Ch, 01h
+                00761 ;                       db 09h, 0Ch, 1Ch, 01h, 1Dh, 01h, 1Ch, 01h, 18h, 01h, 15h, 0Ch, 10h, 01h, 15h, 01h
+                00762 ;                       db 11h, 01h, 10h, 01h, 0Ch, 01h, 09h, 0Ch, 1Ch, 01h, 1Fh, 01h, 1Dh, 01h, 1Ch, 01h
+                00763 ;                       db 18h, 01h, 15h, 0Ch, 09h, 04h, 09h, 02h, 0Ch, 02h, 0Eh, 04h, 10h, 02h, 0Ch, 02h 
+                00764 ;                       db 09h, 0Ch, 20h, 01h, 09h, 04h, 0Ch, 02h, 09h, 02h, 0Ch, 04h, 0Eh, 02h, 13h, 02h 
+                00765 ;                       db 10h, 0Ch, 20h, 01h, 10h, 06h, 13h, 02h, 15h, 06h, 10h, 02h, 0Eh, 02h, 09h, 02h 
+                00766 ;                       db 0Ch, 02h, 0Eh, 02h, 10h, 08h, 0Ch, 04h, 0Eh, 02h, 0Bh, 02h, 09h, 04h, 09h, 02h 
+                00767 ;                       db 07h, 02h, 09h, 0Ch, 10h, 01h, 11h, 01h, 10h, 01h, 0Ch, 01h, 09h, 0Ch, 1Ch, 01h 
+                00768 ;                       db 1Dh, 01h, 1Ch, 01h, 18h, 01h, 15h, 0Ch, 10h, 01h, 15h, 01h, 11h, 01h, 10h, 01h 
+                00769 ;                       db 0Ch, 01h, 09h, 0Ch, 1Ch, 01h, 1Fh, 01h, 1Dh, 01h, 1Ch, 01h, 18h, 01h, 15h, 0Ch 
+                00770 ;                       db 80h, FFh     
+                00771             
+                00772             ORG    05f2h 
+                00773 RMUSIC:       
+05F2  1C011D01  00774                         db 1Ch, 01h, 1Dh, 01h, 1Ch, 01h, 18h, 01h, 15h, 04h, 80h
+      1C 01 18 01 15 04 80   
+                00775 
+                00776             ORG    0725h 
+                00777 SUBFUN:
+0725  DE000005  00778                         db 0DEh, 00h, 00h, 05h, 0ah, 0Fh  
+      0A 0F                  
+                00779 
+                00780             ORG    072bh 
+                00781 FUNC:
+072B  F4000004  00782                         db 0F4h, 00h, 00h, 04h, 04h               
+      04                     
+                00783 
+                00784             ORG    0730h 
+                00785 HTAB:                
+0730  FF000017  00786                         db 0FFh, 00h, 00h, 17h, 03h, 28h, 28h
+      03 28 28               
+                00787 
+                00788             ORG    0737h 
+                00789 ITAB:       
+0737  3A010003  00790                         db 3Ah, 01h, 00h, 03h, 03h, 0Fh, 0Fh         
+      03 0F 0F               
+                00791 
+                00792             ORG    073eh 
+                00793 DTAB:           
+073E  5D010003  00794                         db 5Dh, 01h, 00h, 03h, 03h, 0Fh, 0Fh
+      03 0F 0F               
+                00795 
+                00796             ORG    0745h 
+                00797 ETAB:            
+0745  80010003  00798                         db 80h, 01h, 00h, 03h, 03h, 13h, 4Eh
+      03 13 4E               
+                00799 
+                00800             ORG    074ch 
+                00801 FREQTAB:             
+074C  E118D41A  00802                         db 0E1h, 18h, 0D4h, 1Ah
+0750  C81BBD1D  00803                         db 0C8h, 1Bh, 0BDh, 1Dh, 0B2h, 1Eh, 0A8h, 20h, 9Fh, 22h, 96h, 24h, 8Dh, 26h, 85h, 29h
+      B2 1E A8 20 9F 22 96 24
+      8D 26 85 29            
+0760  7E2B772E  00804                         db 7Eh, 2Bh, 77h, 2Eh, 70h, 31h, 6Ah, 33h, 64h, 37h, 5Eh, 3Ah, 59h, 3Dh, 54h, 41h 
+      70 31 6A 33 64 37 5E 3A
+      59 3D 54 41            
+0770  4F454A49  00805                         db 4Fh, 45h, 4Ah, 49h, 46h, 4Dh, 42h, 52h, 3Eh, 57h, 3Bh, 5Ch, 37h, 62h, 34h, 67h 
+      46 4D 42 52 3E 57 3B 5C
+      37 62 34 67            
+0780  316E2E74  00806                         db 31h, 6Eh, 2Eh, 74h, 2Ch, 7Bh, 29h, 82h, 27h, 8Ah, 25h, 92h
+      2C 7B 29 82 27 8A 25 92
+                00807 
+                00808             ORG    078ch 
+                00809 MAP:
+078C  14131110  00810                         db 14h, 13h, 11h, 10h
+0790  FFFF0F0B  00811                         db 0FFh, 0FFh, 0Fh, 0Bh, 07h, 03h, 0FFh, 0FFh, 0Eh, 0Ah, 06h, 02h, 0FFh, 0FFh, 0Dh, 09h
+      07 03 FF FF 0E 0A 06 02
+      FF FF 0D 09            
+07A0  0501FFFF  00812                         db 05h, 01h, 0FFh, 0FFh, 0Ch, 08h, 04h, 00h, 0FFh, 0FFh, 0FFh, 15h, 16h, 12h            
+      0C 08 04 00 FF FF FF 15
+      16 12                  
+                00813 
+                00814             ORG    07bfh 
+                00815 DISP:       
+07BF  BD        00816                         db 0BDh
+07C0  BF028DA7  00817                         db 0BFh, 02h, 8Dh, 0A7h, 3Fh, 00h, 0AEh, 30h, 00h, 0AEh, 30h, 37h, 87h, 00h, 0BDh, 85h
+      3F 00 AE 30 00 AE 30 37
+      87 00 BD 85            
+07D0  858F37    00818                         db 85h, 8Fh, 37h
+                00819 
+                00820             ORG    07d3h 
+                00821 INITAB:              
+                00822 
+                00823                         ORG    07d9h
+                00824 _ERR:
+07D9  03A30303  00825                         db 03h, 0A3h, 03h, 03h, 8Fh, 02h, 00h
+      8F 02 00               
+                00826 
+                00827             ORG    07e0h 
+                00828 BLANK:               
+07E0  00000000  00829                         db 00h, 00h, 00h, 00h, 00h, 00h, 00h, 00h, 0fh, 0aeh, 8fh, 00h, 0fh, 00h, 00h ,00h 
+      00 00 00 00 0F AE 8F 00
+      0F 00 00 00            
+                00830                         
+                00831             ORG    07f0h 
+                00832 SEGTAB:              
+07F0  BD309BBA  00833                         db 0bdh, 30h, 9bh, 0bah, 36h, 0aeh, 0afh, 38h, 0bfh, 0beh, 3fh, 0a7h, 8dh, 0b3h, 8fh, 0fh
+      36 AE AF 38 BF BE 3F A7
+      8D B3 8F 0F            
+0800  AD3789B1  00834                         db 0adh, 37h, 089h, 0b1h, 097h, 085h, 2bh, 023h, 0a3h, 1fh, 03eh, 03h, 0aeh, 87h, 0b5h, 0b7h 
+      97 85 2B 23 A3 1F 3E 03
+      AE 87 B5 B7            
+0810  A907B68A  00835                         db 0a9h, 07h, 0b6h, 8ah, 083h, 0a2h, 32h, 002h, 0c0h, 00h
+      83 A2 32 02 C0 00      
+                00836 
+                00837 ; 
+                00838 ; 
+                00839                         END
+
+
+ADDHIG          0042  ADDLOW          0040  ADRADD          013D  
+ADRDEC          0160  ADREXC          0183  ADRSDP          0504  
+ADSAVE          17EF  BEGIN           0070  BITEND          0364  
+BLANK           07E0  BRANCH          036A  BURN            0290  
+BYSEG1          0519  BYSEG2          0525  CHK1            0321  
+CHKEY           00A9  CHKO            0317  CL1BYT          037C  
+CL2BYT          0389  CONT            0042  COUNT           02F3  
+DADP            0511  DAIN            0041  DAOT            0041  
+DATAIN          027E  DE50MS          02AF  DELAY           043B  
+DFIX            015D  DFORM1          0392  DFORM2          039B  
+DIGIT           0082  DISP            07BF  DISPBF          17C6  
+DSTEP           0179  DTAB            073E  EFIX            0180  
+ENDFUN          018A  ENDTAP          01BC  EPT             01CE  
+ERR             023F  ERRDIS          0375  ERROR           01C3  
+ETAB            0745  EWT             0193  FILEDP          01FE  
+FREQTAB         074C  FUNC            072B  GETBIT          02EF  
+GETP            02BE  GETPTR          02BB  GLOOP           02E2  
+GTBYTE          02DD  GTPALC          03D5  GTPANA          03E0  
+HAD             0116  HDA             0102  HFIX            00FF  
+HTAB            0730  HTAPWR          0127  IFIX            013A  
+INIDP           03F6  INIDP1          03FC  INIDP2          03FE  
+INIT            054C  INITAB          07D3  ISTEP           0156  
+ITAB            0737  KADRS           00F4  KCOL            04D4  
+KDATA           00ED  KDEC            00E3  KEXEC           00E8  
+KEYMAP          04C5  KHEX            00D4  KIN             0080  
+KINC            00DE  KROW            04E6  KTAPWR          00F8  
+LEAD            01D4  LEAD1           01DB  LEAD2           01E5  
+LOOP1           024F  LOOP2           0262  MAIN            009B  
+MAP             078C  MIDPD           002A  MONSOU          040D  
+MS1K            0470  MS1K1_          0450  MS2K            0475  
+MS2K1_          045A  MS3K            047A  MS3K1_          0464  
+MUSIC           0411  NOKEY           04EC  OLOOP           0341  
+OTBYTE          033B  OUT0            0354  OUT1            035D  
+OUTBIT          034F  P8255           0083  PERIOD          0314  
+PLAY            0426  PREBR           00D8  PROG            025F  
+PWCODE          0080  PWUP            17F5  Q8255           0043  
+RAMCHK          049D  RMUSIC          05F2  RSTMU           0544  
+RSTO            0000  SAV12           03A2  SCD_K           04A6  
+SCD_K1          04CD  SCLOOP          04C0  SCNX            04B5  
+SCPRE           04B3  SEG7            0081  SEGTAB          07F0  
+SETPT           03B2  SETSTO          0094  SHORTP          0302  
+SONG            0558  SOUND           047C  SQWAVE          0482  
+STATE           17F4  STEPBF          17BF  STEPDP          03B9  
+STMONI          17F3  STOP            044B  SUBFUN          0725  
+SUM             048F  SUMCAL          0494  SYSSTK          17BF  
+TAPEIN          02CF  TAPOUT          0330  TBLANK          024D  
+TEMP            17FA  TERR            030C  TEST            17F6  
+TESTM           0537  TESTNE          0257  TLOOP           02D1  
+TONE            0437  TONOUT          0438  TPFUN1          0149  
+TPFUN2          016C  VERIFY          026E  VNEXT           0276  
+WR2716          0227  _ERR            07D9  
