@@ -1,0 +1,840 @@
+;  zmac hello.z80  --od hello --oo cim,lst -c -s -g
+;  z80asm.exe hello.z80 -cim
+;   Convert:
+;       python3 conv.py hello.cim > hello.c
+
+ADDLOW:      EQU     40h 
+DAIN:        EQU     41h 
+DAOT:        EQU     41h 
+ADDHIG:      EQU     42h 
+CONT:        EQU     42h 
+Q8255:       EQU     43h 
+PWCODE:      EQU     80h 
+KIN:         EQU     80h 
+DIGIT:       EQU     82h 
+SEG7:        EQU     81h 
+P8255:       EQU     83h 
+MIDPD:       EQU     2Ah 
+SYSSTK:      EQU     17bfh 
+STEPBF:      EQU     17bfh 
+DISPBF:      EQU     17c6h 
+ADSAVE:      EQU     17efh 
+STMONI:      EQU     17f3h 
+STATE:       EQU     17f4h 
+PWUP:        EQU     17F5h 
+TEST:        EQU     17f6h 
+TEMP:        EQU     17fah 
+; 
+			
+            ORG    0000H 
+RSTO:                
+            LD      B,00H 
+            DJNZ    $ 
+            JP      BEGIN 
+; 
+			
+            ORG    0070h 
+BEGIN:               
+            LD      A,90H 
+            OUT     (P8255),A 
+            LD      A,0FFH 
+            OUT     (DIGIT),A 
+            LD      SP,SYSSTK 
+            LD      A,(PWUP) 
+            CP      PWCODE 
+            CALL    NZ,INIT 
+            CALL    RSTMU 
+            LD      HL,1000H 
+            LD      (ADSAVE),HL 
+            XOR     A 
+            LD      (TEST),A 
+            LD      IX,DISP 
+; 
+SETSTO:     XOR     A 
+            LD      (STATE),A 
+            NOP      
+            NOP      
+            NOP      
+MAIN:       CALL    SCD_K 
+            CALL    MS3K1_ 
+            CALL    CHKEY 
+            JR      MAIN 
+            ORG    00a9h 
+CHKEY:      CP      10H 
+            JR      C,KHEX 
+            LD      HL,TEST 
+            SET     0,(HL) 
+            SUB     10H 
+            CP      04H 
+            LD      HL,SUBFUN 
+            JP      C,BRANCH 
+            LD      IX,DISPBF 
+            SUB     02H 
+            LD      HL,STATE 
+            LD      (HL),A 
+            LD      HL,STMONI 
+            LD      (HL),00H 
+            LD      HL,FUNC 
+            SUB     02H 
+            JP      BRANCH 
+            ORG    00d4h 
+KHEX:       LD      C,A 
+            LD      HL,HTAB 
+PREBR:      LD      A,(STATE) 
+            JP      BRANCH 
+KINC:       LD      HL,ITAB 
+            JR      PREBR 
+KDEC:       LD      HL,DTAB 
+            JR      PREBR 
+KEXEC:      LD      HL,ETAB 
+            JR      PREBR 
+KDATA:      CALL    TESTM 
+            CALL    DFORM2 
+            RET      
+KADRS:      CALL    DFORM1 
+            RET      
+KTAPWR:     CALL    STEPDP 
+            RET      
+            ORG    00ffh 
+HFIX:       JP      ERRDIS 
+HDA:        LD      HL,(ADSAVE) 
+            CALL    RAMCHK 
+            JP      NZ,ERRDIS 
+            CALL    CL1BYT 
+            LD      A,C 
+            RLD      
+            CALL    DFORM2 
+            RET      
+            ORG    0116h 
+HAD:        LD      HL,ADSAVE 
+            CALL    CL2BYT 
+            LD      A,C 
+            RLD      
+            INC     HL 
+            RLD      
+            CALL    DFORM1 
+            RET      
+            ORG    0127h 
+HTAPWR:     CALL    GTPALC 
+            CALL    CL2BYT 
+            LD      A,C 
+            RLD      
+            INC     HL 
+            RLD      
+            CALL    STEPDP 
+            RET      
+            ORG    013ah 
+IFIX:       JP      ERRDIS 
+ADRADD:     LD      HL,(ADSAVE) 
+            INC     HL 
+            LD      (ADSAVE),HL 
+            CALL    DFORM2 
+            RET      
+            ORG    0149h 
+TPFUN1:     LD      HL,STMONI 
+            INC     (HL) 
+            CALL    GTPANA 
+            JR      NZ,ISTEP 
+            DEC     (HL) 
+            JP      ERRDIS 
+ISTEP:      CALL    STEPDP 
+            RET      
+            ORG    015dh 
+DFIX:       JP      ERRDIS 
+ADRDEC:     LD      HL,(ADSAVE) 
+            DEC     HL 
+            LD      (ADSAVE),HL 
+            CALL    DFORM2 
+            RET      
+            ORG    016ch 
+TPFUN2:     LD      HL,STMONI 
+            DEC     (HL) 
+            CALL    GTPANA 
+            JR      NZ,DSTEP 
+            INC     (HL) 
+            JP      ERRDIS 
+DSTEP:      CALL    STEPDP 
+            RET      
+            ORG    0180h 
+EFIX:       JP      ERRDIS 
+ADREXC:     PUSH    HL 
+            LD      hl,(ADSAVE) 
+            EX      (SP),HL 
+            RET      
+            ORG    018ah 
+ENDFUN:     LD      (ADSAVE),DE 
+            CALL    DFORM2 
+            RET      
+            ORG    0193h 
+EWT:        CALL    SUM 
+            JR      C,ERROR 
+            LD      (17C5h),A 
+            LD      HL,0FA0H 
+            CALL    MS1K 
+            LD      HL,STEPBF 
+            LD      BC,0007H 
+            CALL    TAPOUT 
+            LD      HL,0FA0H 
+            CALL    MS2K 
+            CALL    GETPTR 
+            CALL    TAPOUT 
+            LD      HL,0FA0H 
+            CALL    MS2K 
+ENDTAP:     LD      DE,(17C3H) 
+            JR      ENDFUN 
+            ORG    01c3h 
+ERROR:      LD      IX,ERR 
+            JP      SETSTO 
+            ORG    01ceh 
+EPT:        LD      HL,(STEPBF) 
+            LD      (TEMP),HL 
+LEAD:       LD      A,0BFH 
+            OUT     (SEG7),A 
+            LD      HL,1000 
+LEAD1:      CALL    PERIOD 
+            JR      C,LEAD 
+            DEC     HL 
+            LD      A,H 
+            OR      L 
+            JR      NZ,LEAD1 
+LEAD2:      CALL    PERIOD 
+            JR      NC,LEAD2 
+            LD      HL,STEPBF 
+            LD      BC,7 
+            CALL    TAPEIN 
+            JR      C,LEAD 
+            LD      DE,(STEPBF) 
+            CALL    ADRSDP 
+            LD      B,150 
+FILEDP:     CALL    SCD_K1 
+            DJNZ    FILEDP 
+            LD      HL,TEMP 
+            OR      A 
+            SBC     HL,DE 
+            JR      NZ,LEAD 
+            LD      A,11111101B 
+            OUT     (SEG7),A 
+            CALL    GETPTR 
+            JR      C,ERROR 
+            CALL    TAPEIN 
+            JR      C,ERROR 
+            CALL    SUM 
+            LD      HL,17C5H 
+            CP      (HL) 
+            JR      NZ,ERROR 
+            JR      ENDTAP 
+            ORG    0227h 
+WR2716:     LD      IX,DISPBF 
+            PUSH    BC 
+            PUSH    HL 
+            EX      DE,HL 
+            OR      A 
+            SBC     HL,BC 
+            LD      C,L 
+            LD      B,H 
+            LD      DE,0F000H 
+            ADD     HL,DE 
+            JR      C,ERR 
+            POP     HL 
+            PUSH    HL 
+            ADD     HL,DE 
+            JR      C,ERR 
+            ADD     HL,BC 
+ERR:        JP      C,ERROR 
+            INC     BC 
+            POP     DE 
+            POP     HL 
+            DEC     A 
+            JR      Z,TBLANK 
+            DEC     A 
+            JR      Z,PROG 
+            JR      VERIFY 
+TBLANK:     PUSH    DE 
+            PUSH    BC 
+LOOP1:      CALL    DATAIN 
+            CP      0FFH 
+            JR      Z,TESTNE 
+            HALT     
+TESTNE:     INC     DE 
+            DEC     BC 
+            LD      A,B 
+            OR      C 
+            JR      NZ,LOOP1 
+            POP     BC 
+            POP     DE 
+PROG:       PUSH    HL 
+            PUSH    DE 
+            PUSH    BC 
+LOOP2:      CALL    BURN 
+            INC     DE 
+            CPI      
+            JP      PE,LOOP2 
+            POP     BC 
+            POP     DE 
+            POP     HL 
+VERIFY:     CALL    DATAIN 
+            CPI      
+            JR      Z,VNEXT 
+            HALT     
+VNEXT:      INC     DE 
+            JP      PE,VERIFY 
+            RST     0 
+            ORG    027eh 
+DATAIN:     LD      A,82H 
+            OUT     (Q8255),A 
+            LD      A,E 
+            OUT     (ADDLOW),A 
+            LD      A,D 
+            AND     7 
+            SET     7,A 
+            OUT     (ADDHIG),A 
+            IN      A,(DAIN) 
+            RET      
+            ORG    0290h 
+BURN:       PUSH    BC 
+            PUSH    HL 
+            LD      A,80H 
+            OUT     (Q8255),A 
+            LD      A,(HL) 
+            OUT     (DAOT),A 
+            LD      A,E 
+            OUT     (ADDLOW),A 
+            LD      A,D 
+            AND     7 
+            OUT     (ADDHIG),A 
+            LD      C,A 
+            OR      60H 
+            OUT     (CONT),A 
+            LD      A,(HL) 
+            CALL    DADP 
+            CALL    ADRSDP 
+            LD      B,5 
+DE50MS:     CALL    SCD_K1 
+            DJNZ    DE50MS 
+            LD      A,C 
+            OUT     (ADDHIG),A 
+            POP     HL 
+            POP     BC 
+            RET      
+            ORG    02bbh 
+GETPTR:     LD      HL,17C1H 
+GETP:       LD      E,(HL) 
+            INC     HL 
+            LD      D,(HL) 
+            INC     HL 
+            LD      C,(HL) 
+            INC     HL 
+            LD      H,(HL) 
+            LD      L,C 
+            OR      A 
+            SBC     HL,DE 
+            LD      C,L 
+            LD      B,H 
+            INC     BC 
+            EX      DE,HL 
+            RET      
+            ORG    02cfh 
+TAPEIN:     XOR     A 
+            EX      AF,AF' 
+TLOOP:      CALL    GTBYTE 
+            LD      (HL),E 
+            CPI      
+            JP      PE,TLOOP 
+            EX      AF,AF' 
+            RET      
+            ORG    02ddh 
+GTBYTE:     CALL    GETBIT 
+            LD      D,08H 
+GLOOP:      CALL    GETBIT 
+            RR      E 
+            DEC     D 
+            JR      NZ,GLOOP 
+            CALL    GETBIT 
+            RET      
+            ORG    02efh 
+GETBIT:     EXX      
+            LD      HL,0000H 
+COUNT:      CALL    PERIOD 
+            INC     D 
+            DEC     D 
+            JR      NZ,TERR 
+            JR      C,SHORTP 
+            DEC     L 
+            DEC     L 
+            SET     0,H 
+            JR      COUNT 
+SHORTP:     INC     L 
+            BIT     0,H 
+            JR      Z,COUNT 
+            RL      L 
+            EXX      
+            RET      
+            ORG    030ch 
+TERR:       EX      AF,AF' 
+            SCF      
+            EX      AF,AF' 
+            EXX      
+            RET      
+            ORG    0314h 
+PERIOD:     LD      DE,0000H 
+CHKO:       IN      A,(KIN) 
+            INC     DE 
+            RLA      
+            JR      C,CHKO 
+            LD      A,01000000B 
+            OUT     (DIGIT),A 
+CHK1:       IN      A,(KIN) 
+            INC     DE 
+            RLA      
+            JR      NC,CHK1 
+            LD      A,0C0H 
+            OUT     (DIGIT),A 
+            LD      A,E 
+            CP      MIDPD 
+            RET      
+            ORG    0330h 
+TAPOUT:     LD      E,(HL) 
+            CALL    OTBYTE 
+            CPI      
+            JP      PE,TAPOUT 
+            RET      
+            ORG    033bh 
+OTBYTE:     LD      D,08H 
+            OR      A 
+            CALL    OUTBIT 
+OLOOP:      RR      E 
+            CALL    OUTBIT 
+            DEC     D 
+            JR      NZ,OLOOP 
+            SCF      
+            CALL    OUTBIT 
+            RET      
+            ORG    034fh 
+OUTBIT:     EXX      
+            LD      H,00H 
+            JR      C,OUT1 
+OUT0:       LD      L,0CH 
+            CALL    MS2K 
+            LD      L,03H 
+            JR      BITEND 
+OUT1:       LD      L,06H 
+            CALL    MS2K 
+            LD      L,06H 
+BITEND:     CALL    MS1K 
+            EXX      
+            RET      
+
+            ORG    036ah 
+BRANCH:              
+            LD      E,(HL) 
+            INC     HL 
+            LD      D,(HL) 
+            INC     HL 
+            ADD     A,L 
+            LD      L,A 
+            LD      L,(HL) 
+            LD      H,00H 
+            ADD     HL,DE 
+            JP      (HL) 
+
+            ORG    0375h 
+ERRDIS:              
+            LD      HL,TEST 
+            SET     7,(HL) 
+            RET      
+            ORG    037ch 
+CL1BYT:              
+            LD      A,(TEST) 
+            OR      A 
+            RET     Z 
+            LD      A,00H 
+            LD      (HL),A 
+            LD      (TEST),A 
+            RET      
+            ORG    0389h 
+CL2BYT:              
+            CALL    CL1BYT 
+            RET     Z 
+            INC     HL 
+            LD      (HL),A 
+            DEC     HL 
+            RET      
+            ORG    0392h 
+DFORM1:              
+            LD      A,01H 
+            LD      B,04H 
+            LD      HL,17C8H 
+            JR      SAV12 
+            ORG    039Bh 
+DFORM2:              
+            LD      A,02H 
+            LD      B,02H 
+            LD      HL,DISPBF 
+SAV12:      LD      (STATE),A 
+            EXX      
+            LD      DE,(ADSAVE) 
+            CALL    ADRSDP 
+            LD      A,(DE) 
+            CALL    DADP 
+            EXX      
+SETPT:      SET     6,(HL) 
+            INC     HL 
+            DJNZ    SETPT 
+            RET      
+            ORG    03b9h 
+STEPDP:              
+            CALL    GTPALC 
+            LD      E,(HL) 
+            INC     HL 
+            LD      D,(HL) 
+            CALL    ADRSDP 
+            LD      HL,17C8H 
+            LD      B,04H 
+            CALL    SETPT 
+            CALL    GTPANA 
+            LD      L,A 
+            LD      H,02H 
+            LD      (DISPBF),HL 
+            RET      
+            ORG    03d5h 
+GTPALC:              
+            LD      A,(STMONI) 
+            ADD     A,A 
+            LD      HL,STEPBF 
+            ADD     A,L 
+            LD      L,A 
+            RET      
+            ORG    03e0h 
+GTPANA:              
+            LD      A,(STATE) 
+            SUB     01H 
+            ADD     A,A 
+            ADD     A,A 
+            LD      DE,BLANK 
+            ADD     A,E 
+            LD      E,A 
+            LD      A,(STMONI) 
+            ADD     A,E 
+            LD      E,A 
+            LD      A,(DE) 
+            OR      A 
+            RET      
+            ORG    03f6h 
+INIDP:      LD      IX,INITAB 
+            LD      C,15H 
+INIDP1:     LD      B,20H 
+INIDP2:     CALL    SCD_K1 
+            DJNZ    INIDP2 
+            DEC     IX 
+            CALL    MS3K1_ 
+            DEC     C 
+            JR      NZ,INIDP1 
+            RET      
+
+            ORG    040dh 
+MONSOU:     LD      IY,SONG 
+
+
+MUSIC:      PUSH    IY 
+            POP     IX 
+            LD      A,(IX+0) 
+            ADD     A,A 
+            JR      C,STOP 
+            JP      M,MUSIC 
+            NOP      
+            NOP      
+            BIT     6,A 
+            JR      NZ,PLAY 
+            SET     7,C 
+PLAY:       AND     3FH 
+            LD      HL,FREQTAB 
+            ADD     A,L 
+            LD      L,A 
+            LD      E,(HL) 
+            INC     HL 
+            LD      D,(HL) 
+            INC     IX 
+            LD      H,(IX+0) 
+            LD      A,0FFH 
+TONE:       LD      L,D 
+TONOUT:     OUT     (DIGIT),A 
+            LD      B,E 
+DELAY:      NOP      
+            NOP      
+            NOP      
+            DJNZ    DELAY 
+            XOR     C 
+            DEC     L 
+            JR      NZ,TONOUT 
+            DEC     H 
+            JR      NZ,TONE 
+            INC     IX 
+            JR      MUSIC+4 
+STOP:                
+            RET      
+            ORG    0450H 
+MS1K1_:              
+            EXX      
+            LD      HL,0050H 
+            CALL    MS1K 
+            EXX      
+            RET      
+            ORG    045ah 
+MS2K1_:              
+            EXX      
+            LD      HL,00A0H 
+            CALL    MS2K 
+            EXX      
+            RET      
+            ORG    0464h 
+MS3K1_:     EX      AF,AF' 
+            EXX      
+            LD      HL,00E0H 
+            CALL    MS3K 
+            EXX      
+            EX      AF,AF' 
+            RET      
+
+
+            ORG    0470h 
+MS1K:                
+            LD      C,41H 
+            JR      SOUND 
+            ORG    0475h 
+MS2K:                
+            LD      C,1FH 
+            JR      SOUND 
+            ORG    047ah 
+MS3K:                
+            LD      C,0CH 
+            ORG    047ch 
+SOUND:      ADD     HL,HL 
+            LD      DE,0001H 
+            LD      A,0FFH 
+SQWAVE:     OUT     (DIGIT),A 
+            LD      B,C 
+            DJNZ    $ 
+            XOR     80H 
+            SBC     HL,DE 
+            JR      NZ,SQWAVE 
+            RET      
+            ORG    048fh 
+SUM:        CALL    GETPTR 
+            RET     C 
+            XOR     A 
+SUMCAL:     ADD     A,(HL) 
+            CPI      
+            JP      PE,SUMCAL 
+            OR      A 
+            RET      
+            ORG    049dh 
+RAMCHK:     LD      A,(HL) 
+            CPL      
+            LD      (HL),A 
+            LD      A,(HL) 
+            CPL      
+            LD      (HL),A 
+            CP      (HL) 
+            RET      
+
+            ORG    04A6h 
+SCD_K:               
+            PUSH    IX 
+            LD      HL,TEST 
+            BIT     7,(HL) 
+            JR      Z,SCPRE 
+            LD      IX,_ERR 
+SCPRE:      LD      B,04H 
+SCNX:       CALL    SCD_K1 
+            JR      NC,SCPRE 
+            DJNZ    SCNX 
+            RES     7,(HL) 
+            POP     IX 
+SCLOOP:     CALL    SCD_K1 
+            JR      C,SCLOOP 
+KEYMAP:     LD      HL,MAP 
+            ADD     A,L 
+            LD      L,A 
+            LD      A,(HL) 
+            RET      
+            ORG    04cdh 
+SCD_K1:              
+            SCF      
+            EX      AF,AF' 
+            EXX      
+            LD      C,00H 
+            LD      E,0FEH 
+KCOL:       LD      A,(IX+0) 
+            NOP;CPL
+            OUT     (SEG7),A 
+            LD      A,E 
+            OUT     (DIGIT),A 
+            LD      B,009H 
+            DJNZ    $ 
+            LD      B,06H 
+            IN      A,(KIN) 
+            LD      D,A 
+KROW:       RR      D 
+            JR      C,NOKEY 
+            LD      A,C 
+            EX      AF,AF' 
+NOKEY:      INC     C 
+            DJNZ    KROW 
+            INC     IX 
+            RLC     E 
+            LD      A,0FFH 
+            OUT     (DIGIT),A 
+            BIT     6,E 
+            JR      NZ,KCOL 
+            LD      DE,-6 
+            ADD     IX,DE 
+            EXX      
+            EX      AF,AF' 
+            RET      
+            ORG    0504h 
+ADRSDP:              
+            LD      HL,17C8H 
+            LD      A,E 
+            CALL    BYSEG2 
+            LD      A,D 
+            CALL    BYSEG2 
+            RET      
+            ORG    0511h 
+DADP:                
+            LD      HL,DISPBF 
+            CALL    BYSEG2 
+            RET      
+            ORG    0519h 
+BYSEG1:     PUSH    HL 
+            LD      HL,SEGTAB 
+            AND     0FH 
+            ADD     A,L 
+            LD      L,A 
+            LD      A,(HL) 
+            POP     HL 
+            RET      
+            ORG    0525h 
+BYSEG2:     PUSH    AF 
+            CALL    BYSEG1 
+            LD      (HL),A 
+            INC     HL 
+            POP     AF 
+            RRCA     
+            RRCA     
+            RRCA     
+            RRCA     
+            CALL    BYSEG1 
+            LD      (HL),A 
+            INC     HL 
+            RET      
+            ORG    0537h 
+TESTM:               
+            LD      A,(STATE) 
+            CP      01H 
+            RET     Z 
+            CP      02H 
+            RET     Z 
+            POP     HL 
+            JP      ERRDIS 
+            ORG    0544h 
+RSTMU:               
+            LD      IY,RMUSIC 
+            CALL    MUSIC 
+            RET      
+; 
+            ORG    054ch 
+INIT:                
+            CALL    INIDP 
+            CALL    MONSOU 
+            LD      A,PWCODE 
+            LD      (PWUP),A 
+            RET      
+; 
+            ORG    0558h 
+SONG:
+			db 11h,  04h,  13h,  04h,  15h,  04h,  11h,  04h,  11h,  04h,  13h,  04h,  15h,  04h,  11h,  04h
+			db 15h, 04h, 16h, 04h, 18h, 04h, 20h, 04h, 15h, 04h, 16h, 04h, 18h, 04h, 20h, 04h
+			db 18h, 02h, 1Ah, 02h, 18h, 02h, 16h, 02h, 15h, 04h, 11h, 04h, 18h, 02h, 1Ah, 02h
+			db 18h, 02h, 16h, 02h, 15h, 04h, 11h, 04h, 11h, 04h, 0Ch, 04h, 11h, 04h, 20h, 04h
+			db 11h, 04h, 0Ch, 04h, 11h, 04h, 20h, 04h, 80h
+;			db 10h, 01h, 11h, 01h, 10h, 01h, 0Ch, 01h
+;			db 09h, 0Ch, 1Ch, 01h, 1Dh, 01h, 1Ch, 01h, 18h, 01h, 15h, 0Ch, 10h, 01h, 15h, 01h
+;			db 11h, 01h, 10h, 01h, 0Ch, 01h, 09h, 0Ch, 1Ch, 01h, 1Fh, 01h, 1Dh, 01h, 1Ch, 01h
+;			db 18h, 01h, 15h, 0Ch, 09h, 04h, 09h, 02h, 0Ch, 02h, 0Eh, 04h, 10h, 02h, 0Ch, 02h 
+;			db 09h, 0Ch, 20h, 01h, 09h, 04h, 0Ch, 02h, 09h, 02h, 0Ch, 04h, 0Eh, 02h, 13h, 02h 
+;			db 10h, 0Ch, 20h, 01h, 10h, 06h, 13h, 02h, 15h, 06h, 10h, 02h, 0Eh, 02h, 09h, 02h 
+;			db 0Ch, 02h, 0Eh, 02h, 10h, 08h, 0Ch, 04h, 0Eh, 02h, 0Bh, 02h, 09h, 04h, 09h, 02h 
+;			db 07h, 02h, 09h, 0Ch, 10h, 01h, 11h, 01h, 10h, 01h, 0Ch, 01h, 09h, 0Ch, 1Ch, 01h 
+;			db 1Dh, 01h, 1Ch, 01h, 18h, 01h, 15h, 0Ch, 10h, 01h, 15h, 01h, 11h, 01h, 10h, 01h 
+;			db 0Ch, 01h, 09h, 0Ch, 1Ch, 01h, 1Fh, 01h, 1Dh, 01h, 1Ch, 01h, 18h, 01h, 15h, 0Ch 
+;			db 80h, FFh     
+            
+            ORG    05f2h 
+RMUSIC:       
+			db 1Ch, 01h, 1Dh, 01h, 1Ch, 01h, 18h, 01h, 15h, 04h, 80h
+
+            ORG    0725h 
+SUBFUN:
+			db 0DEh, 00h, 00h, 05h, 0ah, 0Fh  
+
+            ORG    072bh 
+FUNC:
+			db 0F4h, 00h, 00h, 04h, 04h               
+
+            ORG    0730h 
+HTAB:                
+			db 0FFh, 00h, 00h, 17h, 03h, 28h, 28h
+
+            ORG    0737h 
+ITAB:       
+			db 3Ah, 01h, 00h, 03h, 03h, 0Fh, 0Fh         
+
+            ORG    073eh 
+DTAB:           
+			db 5Dh, 01h, 00h, 03h, 03h, 0Fh, 0Fh
+
+            ORG    0745h 
+ETAB:            
+			db 80h, 01h, 00h, 03h, 03h, 13h, 4Eh
+
+            ORG    074ch 
+FREQTAB:             
+			db 0E1h, 18h, 0D4h, 1Ah
+			db 0C8h, 1Bh, 0BDh, 1Dh, 0B2h, 1Eh, 0A8h, 20h, 9Fh, 22h, 96h, 24h, 8Dh, 26h, 85h, 29h
+			db 7Eh, 2Bh, 77h, 2Eh, 70h, 31h, 6Ah, 33h, 64h, 37h, 5Eh, 3Ah, 59h, 3Dh, 54h, 41h 
+			db 4Fh, 45h, 4Ah, 49h, 46h, 4Dh, 42h, 52h, 3Eh, 57h, 3Bh, 5Ch, 37h, 62h, 34h, 67h 
+			db 31h, 6Eh, 2Eh, 74h, 2Ch, 7Bh, 29h, 82h, 27h, 8Ah, 25h, 92h
+
+            ORG    078ch 
+MAP:
+			db 14h, 13h, 11h, 10h
+			db 0FFh, 0FFh, 0Fh, 0Bh, 07h, 03h, 0FFh, 0FFh, 0Eh, 0Ah, 06h, 02h, 0FFh, 0FFh, 0Dh, 09h
+			db 05h, 01h, 0FFh, 0FFh, 0Ch, 08h, 04h, 00h, 0FFh, 0FFh, 0FFh, 15h, 16h, 12h            
+
+            ORG    07bfh 
+DISP:       
+			db 0BDh
+			db 0BFh, 02h, 8Dh, 0A7h, 3Fh, 00h, 0AEh, 30h, 00h, 0AEh, 30h, 37h, 87h, 00h, 0BDh, 85h
+			db 85h, 8Fh, 37h
+
+            ORG    07d3h 
+INITAB:              
+
+			ORG    07d9h
+_ERR:
+			db 03h, 0A3h, 03h, 03h, 8Fh, 02h, 00h
+
+            ORG    07e0h 
+BLANK:               
+			db 00h, 00h, 00h, 00h, 00h, 00h, 00h, 00h, 0fh, 0aeh, 8fh, 00h, 0fh, 00h, 00h ,00h 
+			
+            ORG    07f0h 
+SEGTAB:              
+			db 0bdh, 30h, 9bh, 0bah, 36h, 0aeh, 0afh, 38h, 0bfh, 0beh, 3fh, 0a7h, 8dh, 0b3h, 8fh, 0fh
+			db 0adh, 37h, 089h, 0b1h, 097h, 085h, 2bh, 023h, 0a3h, 1fh, 03eh, 03h, 0aeh, 87h, 0b5h, 0b7h 
+			db 0a9h, 07h, 0b6h, 8ah, 083h, 0a2h, 32h, 002h, 0c0h, 00h
+
+; 
+; 
+			END
+			
