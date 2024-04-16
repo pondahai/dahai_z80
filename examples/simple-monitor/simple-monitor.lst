@@ -1,0 +1,405 @@
+                00001 ;;
+                00002 ;; z80asm.exe simple-monitor.z80 -cim
+                00003 ;; python3 conv.py simple-monitor.cim > simple-monitor.c
+                00004 ;;
+                00005 ;; zmac simple-monitor.z80  --od simple-monitor --oo cim,lst -c -s -g
+                00006 ;  python3 conv.py simple-monitor/simple-monitor.cim > simple-monitor.c
+                00007 ;;
+                00008 ;; Simple monitor program.
+                00009 ;;
+                00010 ;; Accept strings from STDIN, and execute them.
+                00011 ;;
+                00012 ;; Built-in commands
+                00013 ;;
+                00014 ;;   [c]all xxxx  -> Call the routine at XXXX
+                00015 ;;
+                00016 ;;   [d]ump       -> Dump 16 bytes of RAM at a given address.
+                00017 ;;
+                00018 ;;   [i]nput      -> Enter bytes
+                00019 ;;
+                00020 ;; Other input will generate an "ERR" message, and be ignored.
+                00021 ;;
+                00022 
+    = 000A      00023 LF:     equ     0ah
+    = 000D      00024 CR:     equ     0dh
+                00025         
+                00026         org 0000h
+                00027 
+                00028     ;;
+                00029     ;; Ensure we have a stack-pointer setup, with some room.
+                00030     ;;
+0000  311701    00031     ld sp, stack_start
+                00032 
+                00033 ;;
+                00034 ;; Entry-point to the monitor.
+                00035 ;;
+                00036 ;; Read text into into `input_buffer`, appending to the buffer until a newline
+                00037 ;; is seen, then invoke `process` to handle the input.
+                00038 ;;
+                00039 monitor:
+                00040         ;; show the prompt.
+0003  3E3E      00041         ld a, '>'
+0005  D301      00042         out (1),a
+                00043 
+                00044 
+0007  211701    00045         ld hl, input_buffer
+                00046 monitor_input_loop:
+                00047         ;; overwrite an previous input
+000A  360A      00048         ld (hl), LF
+                00049 
+                00050         ;; read and store the new character
+000C  DB01      00051         in a,(1)
+000E  77        00052         ld (hl),a
+000F  D301      00053                 out (1),a
+                00054                 
+                00055         ;; was it a newline?  If so process.
+0011  FE0D      00056         cp CR
+0013  2803      00057         jr z, process_input_line
+                00058 
+                00059         ;; Otherwise loop round for more input.
+0015  23        00060         inc hl
+0016  18F2      00061         jr monitor_input_loop
+                00062 
+                00063 
+                00064 
+                00065 ;;
+                00066 ;; process_input_line is called when the monitor has received a complete
+                00067 ;; newline-terminated line of text.
+                00068 ;;
+                00069 ;; We process the contents by looking for commands we understand, if we see
+                00070 ;; input we don't recognize we show a message and return, otherwise we invoke
+                00071 ;; the appropriate handler.
+                00072 ;;
+                00073 ;;  C => CALL
+                00074 ;;  D => DUMP
+                00075 ;;  I => INPUT
+                00076 ;;
+                00077 process_input_line:
+                00078 
+0018  211701    00079         ld hl, input_buffer
+001B  7E        00080         ld a, (hl)
+                00081 
+                00082         ;; C == CALL
+001C  FE63      00083         cp 'c'
+001E  2828      00084         jr z, call_handler
+0020  FE43      00085         cp 'C'
+0022  2824      00086         jr z, call_handler
+                00087 
+                00088         ;; D == DUMP
+0024  FE64      00089         cp 'd'
+0026  282C      00090         jr z, dump_handler
+0028  FE44      00091         cp 'D'
+002A  2828      00092         jr z, dump_handler
+                00093 
+                00094         ;; I == INPUT
+002C  FE69      00095         cp 'i'
+002E  2853      00096         jr z, input_handler
+0030  FE49      00097         cp 'I'
+0032  284F      00098         jr z, input_handler
+                00099 
+                00100         ;;
+                00101         ;; Unknown command: show a message and restart our monitor
+                00102         ;;
+                00103         ;; We just show "ERR" which is simple, and saves bytes compared to
+                00104         ;; outputting a longer message and using a print-string routine.
+                00105         ;;
+0034  3E45      00106         ld a, 'E'
+0036  D301      00107         out (1),a
+0038  3E52      00108         ld a, 'R'
+003A  D301      00109         out (1), a
+003C  D301      00110         out (1), a
+003E  3E0D      00111         ld a, CR
+0040  D301      00112         out (1),a               
+0042  3E0A      00113         ld a, LF
+0044  D301      00114         out (1),a
+0046  18BB      00115         jr monitor
+                00116 
+                00117 
+                00118 
+                00119 
+                00120 ;;
+                00121 ;; Call is invoked with the address to call
+                00122 ;;
+                00123 ;; For example "C0003" will call the routine at 0x0003
+                00124 ;;
+                00125 call_handler:
+                00126 
+                00127         ;; Our input-buffer will start with [cC], so we start looking at the
+                00128         ;; next character.
+0048  211801    00129         ld hl, input_buffer+1
+                00130 
+                00131         ;; Read the address to call into BC
+004B  CDAC00    00132         call read_16_bit_ascii_number
+                00133 
+                00134         ;; We'll be making a call, so we need to have the return
+                00135         ;; address on the stack so that when the call'd routine ends
+                00136         ;; execution goes somewhere sane.
+                00137         ;;
+                00138         ;; We'll want to re-load the monitor, so we'll store the
+                00139         ;; entry point on the stack
+                00140         ;;
+004E  210300    00141         ld hl,monitor
+0051  E5        00142         push hl
+                00143 
+                00144         ;; Now we jump, indirectly, to the address in the BC register.
+0052  C5        00145         push bc
+0053  C9        00146         ret
+                00147 
+                00148 
+                00149 
+                00150 ;;
+                00151 ;; Dump 16 bytes from the current dump_address
+                00152 ;;
+                00153 ;; We're called with either "D" to keep going where we left off or
+                00154 ;; "D1234" if we should start at the given offset.
+                00155 ;;
+                00156 dump_handler:
+                00157 
+                00158         ;; Our input-buffer will start with [dD], so we start looking at the
+                00159         ;; next character.
+0054  211801    00160         ld hl, input_buffer+1
+                00161 
+                00162         ;; Look at the next input-byte.  If empty then no address.
+0057  7E        00163         ld a, (hl)
+0058  FE0D      00164         cp CR
+005A  2807      00165         jr z, dump_handler_no_number
+                00166 
+                00167         ;; OK we expect an (ASCII) address following HL - read it into BC.
+005C  CDAC00    00168         call read_16_bit_ascii_number
+005F  ED43FF00  00169         ld (dump_address), bc
+                00170 
+                00171 dump_handler_no_number:
+                00172         ;; The address we start from
+0063  2AFF00    00173         ld hl, (dump_address)
+                00174         ;; show the address
+0066  CDE200    00175         call output_16_bit_number
+                00176 
+                00177         ;; Loop to print the next 16 bytes at that address.
+0069  0610      00178         ld b, 16
+                00179 dump_byte:
+                00180         ;; show a space
+006B  3E20      00181         ld a, ' '
+006D  D301      00182         out (1), a
+                00183 
+                00184         ;; show the memory-contents.
+006F  4E        00185         ld c, (hl)
+0070  CDEB00    00186         call output_8_bit_number
+0073  23        00187         inc hl
+0074  10F5      00188         djnz dump_byte
+                00189 
+                00190         ;; all done
+0076  3E0D      00191         ld a, CR
+0078  D301      00192         out (1),a
+007A  3E0A      00193         ld a, LF
+007C  D301      00194         out (1),a
+                00195 
+                00196         ;; store our updated/final address.
+007E  22FF00    00197         ld (dump_address), hl
+                00198 jmp_monitor:
+0081  1880      00199         jr monitor
+                00200 
+                00201 
+                00202 
+                00203 ;;
+                00204 ;; Input handler allows code to be assembled at a given address
+                00205 ;;
+                00206 ;; Usage is:
+                00207 ;;
+                00208 ;;  I01234 01 02 03 04 0f
+                00209 ;;
+                00210 ;; i.e. "I<address> byte1 byte2 .. byteN"
+                00211 ;;
+                00212 ;; If there is no address keep going from the last time, which means this
+                00213 ;; works as you expect:
+                00214 ;;
+                00215 ;;   I1000 01 03
+                00216 ;;   I 03 04 0F
+                00217 ;;
+                00218 input_handler:
+                00219         ;; Our input-buffer will start with [iI], so we start looking at the
+                00220         ;; next character.
+0083  211801    00221         ld hl, input_buffer+1
+                00222 
+                00223         ;; Look at the next input-byte.  If it is a space then no address was
+                00224         ;; given, so we keep appending bytes to the address set previously.
+0086  7E        00225         ld a, (hl)
+0087  FE20      00226         cp ' '
+0089  2807      00227         jr z, input_handler_no_address
+                00228 
+                00229         ;; OK we expect an (ASCII) address following HL - Read it into BC.
+008B  CDAC00    00230         call read_16_bit_ascii_number
+008E  ED430101  00231         ld (input_address), bc
+                00232 
+                00233 input_handler_no_address:
+                00234 
+                00235         ;; HL contains the a string.  Get the next byte
+0092  7E        00236         ld a,(hl)
+0093  23        00237         inc hl
+                00238 
+                00239         ;; space? skip
+0094  FE20      00240         cp ' '
+0096  28FA      00241         jr z, input_handler_no_address
+                00242 
+                00243         ;; newline? If so we're done
+0098  FE0D      00244         cp CR
+009A  28E5      00245         jr z, jmp_monitor
+                00246 
+                00247         ;; OK then we have a two-digit number
+009C  2B        00248         dec hl
+009D  CDB500    00249         call read_8b_ascii_number
+                00250 
+                00251         ;; store the byte in RAM
+00A0  ED4B0101  00252         ld bc, (input_address)
+00A4  02        00253         ld (bc), a
+                00254 
+                00255         ;; bump to the next address
+00A5  03        00256         inc bc
+00A6  ED430101  00257         ld (input_address), bc
+                00258 
+                00259         ;; continue
+00AA  18E6      00260         jr input_handler_no_address
+                00261 
+                00262 
+                00263 
+                00264 
+                00265 ;;
+                00266 ;; Convert a 4-digit ASCII number, pointed to by HL to a number.
+                00267 ;; Return that number in BC.
+                00268 ;;
+                00269 read_16_bit_ascii_number:
+                00270         ;; HL is a pointer to a four-char string
+                00271         ;; This is read as a 16 bit hex number
+                00272         ;; The number is stored in BC
+00AC  CDB500    00273         call            read_8b_ascii_number
+00AF  47        00274         ld              b, a
+00B0  CDB500    00275         call            read_8b_ascii_number
+00B3  4F        00276         ld              c, a
+00B4  C9        00277         ret
+                00278 
+                00279 
+                00280 
+                00281 
+                00282 
+                00283 ;;
+                00284 ;; Read the two-digit HEX number from HL, and convert to an integer
+                00285 ;; stored in the A-register.
+                00286 ;;
+                00287 ;; HL will be incremented twice.
+                00288 ;;
+                00289 read_8b_ascii_number:
+00B5  7E        00290         ld              a, (hl)
+                00291         ;; is it lower-case?  If so upper-case it.
+00B6  FE61      00292         cp 'a'
+00B8  3806      00293         jr c, read_8b_asc_number_uc
+00BA  FE7A      00294         cp 'z'
+00BC  3002      00295         jr nc, read_8b_asc_number_uc
+00BE  D620      00296         sub a, 32
+                00297 
+                00298 read_8b_asc_number_uc:
+00C0  CDDA00    00299         call            rd_8b_asc_number_hex
+00C3  87        00300         add             a, a
+00C4  87        00301         add             a, a
+00C5  87        00302         add             a, a
+00C6  87        00303         add             a, a
+00C7  57        00304         ld              d, a
+00C8  23        00305         inc             hl
+                00306         
+                00307         
+00C9  7E        00308     ld          a, (hl)
+                00309         ;; is it lower-case?  If so upper-case it.
+00CA  FE61      00310         cp 'a'
+00CC  3806      00311         jr c, rd_hi8b_asc_number_uc
+00CE  FE7A      00312         cp 'z'
+00D0  3002      00313         jr nc, rd_hi8b_asc_number_uc
+00D2  D620      00314         sub a, 32
+                00315 rd_hi8b_asc_number_uc:          
+00D4  CDDA00    00316         call            rd_8b_asc_number_hex
+00D7  B2        00317         or              d
+00D8  23        00318         inc             hl
+                00319         
+                00320         
+00D9  C9        00321         ret
+                00322 rd_8b_asc_number_hex:
+00DA  D630      00323         sub             a, '0'
+00DC  FE0A      00324         cp              10
+00DE  D8        00325         ret             c
+00DF  D607      00326         sub             a,'A'-'0'-10
+00E1  C9        00327         ret
+                00328 
+                00329 
+                00330 ;;
+                00331 ;; Display the 16-bit number stored in HL in hex.
+                00332 ;;
+                00333 output_16_bit_number:
+                00334 
+00E2  4C        00335    ld  c,h
+00E3  CDEB00    00336    call  output_8_bit_number
+00E6  4D        00337    ld  c,l
+00E7  CDEB00    00338    call output_8_bit_number
+00EA  C9        00339    ret
+                00340 
+                00341 ;;
+                00342 ;; Display the 8-bit number stored in C in hex.
+                00343 ;;
+                00344 output_8_bit_number:
+00EB  79        00345    ld  a,c
+00EC  1F        00346    rra
+00ED  1F        00347    rra
+00EE  1F        00348    rra
+00EF  1F        00349    rra
+00F0  CDF400    00350    call  Conv
+00F3  79        00351    ld  a,c
+                00352 Conv:
+00F4  E60F      00353    and  0Fh
+00F6  C690      00354    add  a,90h
+00F8  27        00355    daa
+00F9  CE40      00356    adc  a,40h
+00FB  27        00357    daa
+00FC  D301      00358    out (1),a
+00FE  C9        00359    ret
+                00360 
+                00361 
+                00362 
+                00363 ;;;;;;;;
+                00364 ;;;;;;;; RAM stuff
+                00365 ;;;;;;;;
+                00366 
+                00367 ;;
+                00368 ;; Here we store some values.
+                00369 ;;
+                00370 
+                00371 ;; DUMP: We track of the address from which we're dumping.
+                00372 dump_address:
+00FF  0000      00373         db 0,0
+                00374 ;; INPUT: Keep track of the address to which we next write.
+                00375 input_address:
+0101  0000      00376         db 0,0
+                00377 
+                00378 ;; We don't nest calls too deeply ..
+                00379 stack_end:
+0103  0000      00380         db 0, 0
+0105  0000      00381         db 0, 0
+0107  0000      00382         db 0, 0
+0109  0000      00383         db 0, 0
+010B  0000      00384         db 0, 0
+010D  0000      00385         db 0, 0
+010F  0000      00386         db 0, 0
+0111  0000      00387         db 0, 0
+0113  0000      00388         db 0, 0
+0115  0000      00389         db 0, 0
+                00390 stack_start:
+                00391 
+                00392 ;; Command-line input buffer.
+                00393 input_buffer:
+                00394         END
+
+
+CALL_HANDLER    0048  CONV            00F4  CR              000D  
+DUMP_ADDRESS    00FF  DUMP_BYTE       006B  DUMP_HANDLER    0054  
+DUMP_HANDLER_NO 0063  INPUT_ADDRESS   0101  INPUT_BUFFER    0117  
+INPUT_HANDLER   0083  INPUT_HANDLER_N 0092  JMP_MONITOR     0081  
+LF              000A  MONITOR         0003  MONITOR_INPUT_L 000A  
+OUTPUT_16_BIT_N 00E2  OUTPUT_8_BIT_NU 00EB  PROCESS_INPUT_L 0018  
+RD_8B_ASC_NUMBE 00DA  RD_HI8B_ASC_NUM 00D4  READ_16_BIT_ASC 00AC  
+READ_8B_ASCII_N 00B5  READ_8B_ASC_NUM 00C0  STACK_END       0103  
+STACK_START     0117  
