@@ -5,6 +5,7 @@
 ![螢幕擷取畫面 2024-04-11 163736](https://github.com/pondahai/dahai_z80/assets/7918732/126268b1-b3d6-45ac-be49-6ff2f62e6d3f)
 
 ![螢幕擷取畫面 2024-04-11 163752](https://github.com/pondahai/dahai_z80/assets/7918732/83b66765-ec71-4fa6-baa6-74ba623ca22e)
+![image](https://github.com/pondahai/dahai_z80/assets/7918732/f8c9452b-f7b8-43e4-a65e-76d133ef45dc)
 
 ## 參考來源  reference  
 Z80微電腦製作，劉秋良，欣大出版  
